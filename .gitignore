@@ -17,3 +17,5 @@ typechain-types/
 *.swp
 .DS_Store
 Thumbs.db
+
+artifacts-export/deployment.json

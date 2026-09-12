@@ -1,0 +1,22 @@
+# Environment / secrets
+.env
+
+# Database
+agentpay.db
+*.db
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Virtual environments
+venv/
+.venv/
+
+# Testing
+.pytest_cache/
+.coverage
+
+# macOS
+.DS_Store

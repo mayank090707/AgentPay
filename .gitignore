@@ -1,0 +1,19 @@
+# ── Secrets (NEVER commit these) ──────────────────────────────────────────────
+.env
+.env.local
+.env.*.local
+
+# ── Node ──────────────────────────────────────────────────────────────────────
+node_modules/
+
+# ── Hardhat build output ──────────────────────────────────────────────────────
+artifacts/
+cache/
+typechain-types/
+
+# ── Editor ────────────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db

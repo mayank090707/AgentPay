@@ -1,4 +1,8 @@
-require("@nomicfoundation/hardhat-toolbox");
+require("@nomicfoundation/hardhat-ethers");
+require("@nomicfoundation/hardhat-chai-matchers");
+require("@nomicfoundation/hardhat-network-helpers");
+const path = require("path");
+require("dotenv").config({ path: path.resolve(__dirname, "../.env") });
 require("dotenv").config();
 
 const DEPLOYER_PRIVATE_KEY = process.env.DEPLOYER_PRIVATE_KEY || "0x" + "0".repeat(64);
@@ -39,7 +43,6 @@ module.exports = {
     },
   },
 
-  // Store compiled artifacts in a predictable location for exportAbi.js
   paths: {
     sources: "./contracts",
     tests: "./test",

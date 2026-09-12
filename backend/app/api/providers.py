@@ -37,7 +37,7 @@ def _calculate_provider_price(
         text = payload.get("text", "")
         char_count = len(text)
         units = max(1, (char_count + 99) // 100)
-        return round(units * price_per_unit, 4)
+        return round(units * price_per_unit, 6)
 
     elif service_type == "compute":
         operation = payload.get("operation", "")
@@ -50,7 +50,7 @@ def _calculate_provider_price(
             units = max(1, dim // 32)
         else:
             units = 1
-        return round(units * price_per_unit, 4)
+        return round(units * price_per_unit, 6)
 
     elif service_type == "storage":
         value = payload.get("value", "")
@@ -58,9 +58,9 @@ def _calculate_provider_price(
         size_mb = size_bytes / (1024 * 1024)
         if size_mb < 0.01:
             size_mb = 0.5  # minimum charge equivalent
-        return round(max(0.01, size_mb * price_per_unit), 4)
+        return round(max(0.00005, size_mb * price_per_unit), 6)
 
-    return round(price_per_unit, 4)
+    return round(price_per_unit, 6)
 
 
 def _build_provider_schema(provider) -> ProviderInfo:

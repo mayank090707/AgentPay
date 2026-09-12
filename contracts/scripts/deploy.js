@@ -12,11 +12,12 @@
  *   SEPOLIA_RPC_URL        — RPC endpoint
  */
 
+const path       = require("path");
+require("dotenv").config({ path: path.resolve(__dirname, "../../.env") });
 require("dotenv").config();
 const hre        = require("hardhat");
 const { ethers } = hre;
 const fs         = require("fs");
-const path       = require("path");
 
 async function main() {
   // ── 1. Read and validate environment configuration ───────────────────────

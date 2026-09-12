@@ -113,10 +113,16 @@ def test_onchain_verification_contract_event_success(db_session, mock_web3):
     # Pad provider address to 32 bytes for topic 2
     provider_topic = HexBytes(HexBytes(provider_addr).rjust(32, b"\0"))
 
+    verifier = OnChainPaymentVerifier(
+        provider_wallet_address=provider_addr,
+        web3_instance=mock_web3,
+    )
+
     mock_receipt = {
         "status": 1,
         "logs": [
             {
+                "address": verifier.contract_address,
                 "topics": [
                     HexBytes(PAYMENT_AUTHORIZED_TOPIC),
                     HexBytes(req_id),
@@ -126,20 +132,16 @@ def test_onchain_verification_contract_event_success(db_session, mock_web3):
             }
         ],
     }
+
     mock_tx = {
         "hash": tx_hash,
         "from": agent_addr,
-        "to": "0x" + "33" * 20,  # Contract address
+        "to": verifier.contract_address or ("0x" + "33" * 20),
         "value": 0,
     }
 
     mock_web3.eth.get_transaction_receipt.return_value = mock_receipt
     mock_web3.eth.get_transaction.return_value = mock_tx
-
-    verifier = OnChainPaymentVerifier(
-        provider_wallet_address=provider_addr,
-        web3_instance=mock_web3,
-    )
 
     proof = PaymentVerifyRequest(
         quote_id=quote.id,
@@ -219,10 +221,13 @@ def test_wrong_recipient_in_contract_log_rejected(db_session, mock_web3):
     )
     wrong_topic = HexBytes(HexBytes(wrong_provider).rjust(32, b"\0"))
 
+    verifier = OnChainPaymentVerifier(provider_wallet_address=provider_addr, web3_instance=mock_web3)
+    contract_addr_test = verifier.contract_address or ("0x" + "33" * 20)
     mock_web3.eth.get_transaction_receipt.return_value = {
         "status": 1,
         "logs": [
             {
+                "address": contract_addr_test,
                 "topics": [
                     HexBytes(PAYMENT_AUTHORIZED_TOPIC),
                     HexBytes(quote.request_id),
@@ -232,9 +237,7 @@ def test_wrong_recipient_in_contract_log_rejected(db_session, mock_web3):
             }
         ],
     }
-    mock_web3.eth.get_transaction.return_value = {"hash": tx_hash, "from": "0x1", "to": "0x2", "value": 0}
-
-    verifier = OnChainPaymentVerifier(provider_wallet_address=provider_addr, web3_instance=mock_web3)
+    mock_web3.eth.get_transaction.return_value = {"hash": tx_hash, "from": "0x1", "to": contract_addr_test, "value": 0}
     proof = PaymentVerifyRequest(quote_id=quote.id, tx_hash=tx_hash, payer_address="0x1")
 
     with pytest.raises(PaymentVerificationError) as exc_info:
@@ -268,10 +271,13 @@ def test_wrong_amount_in_contract_log_rejected(db_session, mock_web3):
     )
     provider_topic = HexBytes(HexBytes(provider_addr).rjust(32, b"\0"))
 
+    verifier = OnChainPaymentVerifier(provider_wallet_address=provider_addr, web3_instance=mock_web3)
+    contract_addr_test = verifier.contract_address or ("0x" + "33" * 20)
     mock_web3.eth.get_transaction_receipt.return_value = {
         "status": 1,
         "logs": [
             {
+                "address": contract_addr_test,
                 "topics": [
                     HexBytes(PAYMENT_AUTHORIZED_TOPIC),
                     HexBytes(quote.request_id),
@@ -281,9 +287,7 @@ def test_wrong_amount_in_contract_log_rejected(db_session, mock_web3):
             }
         ],
     }
-    mock_web3.eth.get_transaction.return_value = {"hash": tx_hash, "from": "0x1", "to": "0x2", "value": 0}
-
-    verifier = OnChainPaymentVerifier(provider_wallet_address=provider_addr, web3_instance=mock_web3)
+    mock_web3.eth.get_transaction.return_value = {"hash": tx_hash, "from": "0x1", "to": contract_addr_test, "value": 0}
     proof = PaymentVerifyRequest(quote_id=quote.id, tx_hash=tx_hash, payer_address="0x1")
 
     with pytest.raises(PaymentVerificationError) as exc_info:

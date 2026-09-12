@@ -31,7 +31,7 @@ def test_compute_402_payment_required(client):
     assert response.status_code == 402
     assert response.headers.get("X-Payment-Required") == "true"
     data = response.json()
-    assert data["amount"] == 0.50
+    assert data["amount"] == 0.0012
 
 
 def test_storage_402_payment_required(client):

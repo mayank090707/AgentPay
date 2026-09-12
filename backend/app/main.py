@@ -9,6 +9,7 @@ from backend.app.api.services import router as services_router
 from backend.app.api.payment import router as payment_router
 from backend.app.api.receipts import router as receipts_router
 from backend.app.api.audit import router as audit_router
+from backend.app.api.providers import router as providers_router
 
 
 @asynccontextmanager
@@ -44,6 +45,7 @@ app.add_middleware(
 
 # Include Routers
 app.include_router(health_router)
+app.include_router(providers_router)
 app.include_router(services_router)
 app.include_router(payment_router)
 app.include_router(receipts_router)

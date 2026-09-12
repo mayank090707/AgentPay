@@ -15,11 +15,12 @@ class Quote(Base):
     __tablename__ = "quotes"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    request_id = Column(String(36), index=True, nullable=False)
+    request_id = Column(String(255), index=True, nullable=False)
     service_type = Column(String(50), nullable=False)
     amount = Column(Float, nullable=False)
     currency = Column(String(20), default="USDC")
     provider_address = Column(String(100), nullable=False)
     status = Column(SQLEnum(QuoteStatus), default=QuoteStatus.PENDING, nullable=False)
+    input_hash = Column(String(64), index=True, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     expires_at = Column(DateTime, nullable=False)

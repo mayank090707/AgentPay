@@ -38,7 +38,7 @@ def get_receipt_by_request_id(
         amount=payment.amount,
         currency=quote.currency,
         payer_address=payment.payer_address,
-        provider_address=settings.PROVIDER_WALLET_ADDRESS,
+        provider_address=quote.provider_address or settings.PROVIDER_WALLET_ADDRESS,
         content_hash=delivery.content_hash,
         delivered_at=delivery.delivered_at,
         signature=delivery.receipt_signature

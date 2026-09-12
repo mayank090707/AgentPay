@@ -9,7 +9,7 @@ class Payment(Base):
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     quote_id = Column(String(36), index=True, nullable=False, unique=True)
-    request_id = Column(String(36), index=True, nullable=False)
+    request_id = Column(String(255), index=True, nullable=False)
     tx_hash = Column(String(100), index=True, nullable=False, unique=True)
     payer_address = Column(String(100), nullable=False)
     amount = Column(Float, nullable=False)

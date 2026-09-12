@@ -89,7 +89,8 @@ def verify_request_integrity(db: Session, request_id: str) -> Dict[str, Any]:
             tx_hash=payment.tx_hash,
             content_hash=delivery.content_hash,
             amount=payment.amount,
-            payer_address=payment.payer_address
+            payer_address=payment.payer_address,
+            provider_address=quote.provider_address or settings.PROVIDER_WALLET_ADDRESS
         )
         if delivery.receipt_signature != expected_signature:
             is_valid = False

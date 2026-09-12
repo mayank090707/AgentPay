@@ -21,17 +21,20 @@ class TranslationRequest(BaseModel):
     text: str = Field(..., description="Text to translate")
     source_lang: str = Field("auto", description="Source language ISO code")
     target_lang: str = Field("en", description="Target language ISO code")
+    provider_id: Optional[str] = Field(None, description="Optional provider ID from /providers registry. Defaults to the backend's configured provider.")
 
 
 class ComputeRequest(BaseModel):
     operation: str = Field(..., description="Computational operation type, e.g., 'matrix_multiply', 'prime_factorization', 'data_embedding'")
     params: Dict[str, Any] = Field(default_factory=dict, description="Parameters for the computation task")
+    provider_id: Optional[str] = Field(None, description="Optional provider ID from /providers registry. Defaults to the backend's configured provider.")
 
 
 class StorageRequest(BaseModel):
     key: str = Field(..., description="Unique key for the storage object")
     value: str = Field(..., description="Data payload to store")
     ttl_seconds: Optional[int] = Field(3600, description="Time to live in seconds")
+    provider_id: Optional[str] = Field(None, description="Optional provider ID from /providers registry. Defaults to the backend's configured provider.")
 
 
 # Generic Payment Proof Header / Schema
@@ -62,3 +65,40 @@ class ServiceSuccessResponse(BaseModel):
     data: Dict[str, Any]
     content_hash: str
     receipt: Dict[str, Any]
+
+
+# Provider Discovery & Comparison Schemas
+class ProviderServicePricing(BaseModel):
+    service_type: str
+    price_per_unit: float
+    unit: str
+    currency: str = "USDC"
+
+
+class ProviderInfo(BaseModel):
+    provider_id: str
+    name: str
+    wallet_address: str
+    base_url: str
+    description: str
+    services: Dict[str, ProviderServicePricing]
+
+
+class ProviderListResponse(BaseModel):
+    total: int
+    providers: list[ProviderInfo]
+
+
+class ProviderCompareItem(BaseModel):
+    provider_id: str
+    name: str
+    wallet_address: str
+    base_url: str
+    service_type: str
+    calculated_price: float
+    currency: str = "USDC"
+
+
+class ProviderCompareResponse(BaseModel):
+    service_type: str
+    providers: list[ProviderCompareItem]  # sorted cheapest-first

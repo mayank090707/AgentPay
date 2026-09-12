@@ -18,12 +18,13 @@ def create_receipt_signature(
     content_hash: str,
     amount: float,
     payer_address: str,
+    provider_address: str = settings.PROVIDER_WALLET_ADDRESS,
     secret_key: str = settings.HMAC_SECRET
 ) -> str:
     """
     Computes a cryptographic HMAC-SHA256 signature for the receipt fields.
     """
-    signature_base = f"{receipt_id}:{request_id}:{quote_id}:{tx_hash}:{content_hash}:{amount:.4f}:{payer_address}:{settings.PROVIDER_WALLET_ADDRESS}"
+    signature_base = f"{receipt_id}:{request_id}:{quote_id}:{tx_hash}:{content_hash}:{amount:.4f}:{payer_address}:{provider_address}"
     return hmac.new(
         secret_key.encode('utf-8'),
         signature_base.encode('utf-8'),
@@ -41,6 +42,7 @@ def generate_payment_receipt(
     """
     receipt_id = str(uuid.uuid4())
     delivered_at = datetime.utcnow()
+    provider_addr = quote.provider_address or settings.PROVIDER_WALLET_ADDRESS
     
     signature = create_receipt_signature(
         receipt_id=receipt_id,
@@ -49,7 +51,8 @@ def generate_payment_receipt(
         tx_hash=payment.tx_hash,
         content_hash=content_hash,
         amount=payment.amount,
-        payer_address=payment.payer_address
+        payer_address=payment.payer_address,
+        provider_address=provider_addr
     )
     
     return ReceiptResponse(
@@ -61,7 +64,7 @@ def generate_payment_receipt(
         amount=payment.amount,
         currency=quote.currency,
         payer_address=payment.payer_address,
-        provider_address=settings.PROVIDER_WALLET_ADDRESS,
+        provider_address=provider_addr,
         content_hash=content_hash,
         delivered_at=delivered_at,
         signature=signature
@@ -79,6 +82,7 @@ def verify_receipt_signature(receipt: ReceiptResponse) -> bool:
         tx_hash=receipt.tx_hash,
         content_hash=receipt.content_hash,
         amount=receipt.amount,
-        payer_address=receipt.payer_address
+        payer_address=receipt.payer_address,
+        provider_address=receipt.provider_address
     )
     return hmac.compare_digest(expected_sig, receipt.signature)

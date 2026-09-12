@@ -21,3 +21,16 @@ def get_db():
 
 def init_db():
     Base.metadata.create_all(bind=engine)
+    if "sqlite" in settings.DATABASE_URL:
+        from sqlalchemy import text
+        with engine.connect() as conn:
+            for query in [
+                "ALTER TABLE quotes ADD COLUMN input_hash VARCHAR(64)",
+                "ALTER TABLE deliveries ADD COLUMN output_data TEXT",
+                "ALTER TABLE deliveries ADD COLUMN receipt_json TEXT",
+            ]:
+                try:
+                    conn.execute(text(query))
+                    conn.commit()
+                except Exception:
+                    pass

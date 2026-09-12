@@ -3,6 +3,7 @@ import { Outlet } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import Topbar from './Topbar';
 import { SidebarProvider } from '../../context/SidebarContext';
+import TransactionStatusModal from '../common/TransactionStatusModal';
 import appBg from '../../assets/app-bg.png';
 
 export default function AppLayout() {
@@ -24,6 +25,9 @@ export default function AppLayout() {
             <Outlet />
           </main>
         </div>
+
+        {/* Global Transaction Lifecycle Modal */}
+        <TransactionStatusModal />
       </div>
     </SidebarProvider>
   );

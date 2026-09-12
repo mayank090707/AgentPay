@@ -2,13 +2,26 @@ import React from 'react';
 import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
 import { ShieldCheck, ArrowRight } from 'lucide-react';
 
-export default function BudgetUsageChart({ spent, remaining, total }) {
+export default function BudgetUsageChart({ spent = 0, remaining = 0, total = 0, unit = '₹' }) {
+  const safeSpent = Number(spent) || 0;
+  const safeRemaining = Number(remaining) || 0;
+  const safeTotal = Number(total) || (safeSpent + safeRemaining);
+
   const data = [
-    { name: 'Spent', value: spent, color: '#3B82F6' },
-    { name: 'Remaining', value: remaining, color: '#FCA5A5' }
+    { name: 'Spent', value: safeSpent, color: '#3B82F6' },
+    { name: 'Remaining', value: safeRemaining, color: '#FCA5A5' }
   ];
 
-  const spentPercentage = Math.round((spent / total) * 100);
+  const spentPercentage = safeTotal > 0 
+    ? Math.min(100, Math.max(0, Math.round((safeSpent / safeTotal) * 100))) 
+    : 0;
+
+  const formatValue = (val) => {
+    if (unit === 'ETH') {
+      return `${val} ETH`;
+    }
+    return `₹${Number(val).toFixed(2)}`;
+  };
 
   return (
     <div className="bg-[#FFF9F5] rounded-2xl p-5 border border-[#E9D8CC] shadow-card flex flex-col justify-between h-full">
@@ -48,7 +61,7 @@ export default function BudgetUsageChart({ spent, remaining, total }) {
         <div className="flex items-center justify-between text-xs font-medium">
           <div className="flex items-center space-x-2">
             <span className="w-2.5 h-2.5 rounded-full bg-[#3B82F6]"></span>
-            <span className="text-[#343434]">₹{spent.toFixed(2)}</span>
+            <span className="text-[#343434]">{formatValue(safeSpent)}</span>
           </div>
           <span className="text-gray-500">Spent</span>
         </div>
@@ -56,7 +69,7 @@ export default function BudgetUsageChart({ spent, remaining, total }) {
         <div className="flex items-center justify-between text-xs font-medium">
           <div className="flex items-center space-x-2">
             <span className="w-2.5 h-2.5 rounded-full bg-[#FCA5A5]"></span>
-            <span className="text-[#343434]">₹{remaining.toFixed(2)}</span>
+            <span className="text-[#343434]">{formatValue(safeRemaining)}</span>
           </div>
           <span className="text-gray-500">Remaining</span>
         </div>

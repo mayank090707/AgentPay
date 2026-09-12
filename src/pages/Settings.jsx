@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useBlockchain } from '../context/BlockchainContext';
 import { 
   User, 
   Mail, 
@@ -21,10 +22,25 @@ import {
   Laptop
 } from 'lucide-react';
 import { mockSettings } from '../data/mockData';
+import OwnerControlsModal from '../components/settings/OwnerControlsModal';
 
 export default function Settings() {
   const { user, logout } = useAuth();
+  const { 
+    account, 
+    chainId, 
+    isConnected, 
+    isCorrectChain, 
+    isContractConfigured, 
+    contractAddress, 
+    budget,
+    isOwner,
+    networkName 
+  } = useBlockchain();
   const navigate = useNavigate();
+
+  // Owner Controls Modal State
+  const [showOwnerModal, setShowOwnerModal] = useState(false);
 
   // Profile Edit Local State
   const [isEditingProfile, setIsEditingProfile] = useState(false);
@@ -266,35 +282,58 @@ export default function Settings() {
             <div className="grid grid-cols-3 gap-3 bg-white p-4 rounded-2xl border border-[#E9D8CC] text-xs">
               <div>
                 <span className="text-[10px] text-gray-400 block font-medium">Hard Limit</span>
-                <span className="font-extrabold text-sm text-[#343434]">₹500</span>
+                <span className="font-extrabold text-sm text-[#343434]">
+                  {budget ? `${budget.hardCapEth} ETH` : '₹500 (Demo)'}
+                </span>
               </div>
               <div>
                 <span className="text-[10px] text-gray-400 block font-medium">Current Spend</span>
-                <span className="font-bold text-sm text-[#55705C]">₹320</span>
+                <span className="font-bold text-sm text-[#55705C]">
+                  {budget ? `${budget.totalSpentEth} ETH` : '₹320 (Demo)'}
+                </span>
               </div>
               <div>
                 <span className="text-[10px] text-gray-400 block font-medium">Remaining</span>
-                <span className="font-extrabold text-sm text-[#3E8C5A]">₹180</span>
+                <span className="font-extrabold text-sm text-[#3E8C5A]">
+                  {budget ? `${budget.remainingEth} ETH` : '₹180 (Demo)'}
+                </span>
               </div>
             </div>
 
             <div className="p-3.5 bg-white border border-[#E9D8CC] rounded-2xl text-xs space-y-1">
               <div className="flex items-center justify-between text-[11px] font-extrabold text-gray-700">
                 <span>Enforcement Layer:</span>
-                <span className="font-mono text-[#3E8C5A]">Smart Contract</span>
+                <span className="font-mono text-[#3E8C5A]">
+                  {isContractConfigured ? 'Sepolia Smart Contract' : 'Local Demo Guard'}
+                </span>
               </div>
               <p className="text-gray-500 text-[11px] leading-relaxed pt-1">
                 Spending limits are enforced outside the agent by the smart contract and cannot be edited locally from the frontend.
               </p>
             </div>
 
-            <button
-              onClick={() => navigate('/security')}
-              className="w-full py-3 bg-[#FAD2C0] hover:bg-[#f8bd9e] text-[#343434] font-bold text-xs rounded-2xl shadow-xs flex items-center justify-center space-x-2 transition-all cursor-pointer"
-            >
-              <span>View Security Center</span>
-              <ArrowRight className="w-4 h-4" />
-            </button>
+            <div className="flex flex-col sm:flex-row gap-2.5 pt-1">
+              <button
+                onClick={() => setShowOwnerModal(true)}
+                className={`flex-1 py-3 border rounded-2xl font-bold text-xs flex items-center justify-center space-x-2 transition-all cursor-pointer shadow-xs ${
+                  isOwner
+                    ? 'bg-[#3E8C5A] hover:bg-[#2E7D32] text-white border-[#2E7D32]'
+                    : 'bg-white hover:bg-[#FDF8F5] text-[#343434] border-[#E9D8CC]'
+                }`}
+              >
+                <ShieldCheck className="w-4 h-4 text-[#3E8C5A] shrink-0" />
+                <span>{isOwner ? 'Manage Contract (Owner Portal)' : 'Smart Contract Parameters'}</span>
+              </button>
+
+              <button
+                onClick={() => navigate('/security')}
+                className="py-3 px-4 bg-[#FAD2C0] hover:bg-[#f8bd9e] text-[#343434] font-bold text-xs rounded-2xl shadow-xs flex items-center justify-center space-x-1 transition-all cursor-pointer"
+                title="View Security Center"
+              >
+                <span>Security</span>
+                <ArrowRight className="w-4 h-4" />
+              </button>
+            </div>
           </div>
 
           {/* 6. NOTIFICATIONS PREFERENCES */}
@@ -342,25 +381,33 @@ export default function Settings() {
                 <Globe className="w-5 h-5 text-gray-600" />
                 <span>Connection & Environment</span>
               </h2>
-              <span className="text-[10px] font-mono text-gray-400">Render Deployment Ready</span>
+              <span className="text-[10px] font-mono text-gray-400">Sepolia Network</span>
             </div>
 
             <div className="space-y-2 text-xs font-mono">
-              <div className="bg-white p-2.5 rounded-xl border border-[#E9D8CC] flex justify-between">
-                <span className="text-gray-500 font-sans font-medium">Frontend</span>
-                <span className="font-bold text-[#343434]">{mockSettings.connectionStatus.frontend}</span>
+              <div className="bg-white p-2.5 rounded-xl border border-[#E9D8CC] flex justify-between items-center">
+                <span className="text-gray-500 font-sans font-medium">Wallet State</span>
+                <span className={`font-bold ${isConnected ? 'text-[#2E7D32]' : 'text-gray-500'}`}>
+                  {isConnected ? `${account.substring(0, 6)}...${account.substring(account.length - 4)}` : 'Disconnected'}
+                </span>
               </div>
-              <div className="bg-white p-2.5 rounded-xl border border-[#E9D8CC] flex justify-between">
-                <span className="text-gray-500 font-sans font-medium">Environment</span>
-                <span className="font-bold text-blue-600">{mockSettings.connectionStatus.environment}</span>
+              <div className="bg-white p-2.5 rounded-xl border border-[#E9D8CC] flex justify-between items-center">
+                <span className="text-gray-500 font-sans font-medium">Network</span>
+                <span className={`font-bold ${isCorrectChain ? 'text-[#2E7D32]' : 'text-amber-600'}`}>
+                  {isCorrectChain ? 'Sepolia Testnet (11155111)' : chainId ? `Chain ${chainId} (Wrong)` : 'Sepolia (Unconnected)'}
+                </span>
               </div>
-              <div className="bg-white p-2.5 rounded-xl border border-[#E9D8CC] flex justify-between">
-                <span className="text-gray-500 font-sans font-medium">API Layer</span>
-                <span className="font-bold text-amber-600">{mockSettings.connectionStatus.api}</span>
+              <div className="bg-white p-2.5 rounded-xl border border-[#E9D8CC] flex justify-between items-center">
+                <span className="text-gray-500 font-sans font-medium">Contract Config</span>
+                <span className={`font-bold truncate max-w-[160px] ${isContractConfigured ? 'text-[#2E7D32]' : 'text-amber-700'}`}>
+                  {isContractConfigured ? `${contractAddress.substring(0, 6)}...${contractAddress.substring(contractAddress.length - 4)}` : 'Not Configured in .env'}
+                </span>
               </div>
-              <div className="bg-white p-2.5 rounded-xl border border-[#E9D8CC] flex justify-between">
-                <span className="text-gray-500 font-sans font-medium">Blockchain</span>
-                <span className="font-bold text-[#55705C]">{mockSettings.connectionStatus.blockchain}</span>
+              <div className="bg-white p-2.5 rounded-xl border border-[#E9D8CC] flex justify-between items-center">
+                <span className="text-gray-500 font-sans font-medium">Enforcement</span>
+                <span className="font-bold text-[#55705C]">
+                  {isContractConfigured ? 'Active (Sepolia Contract)' : 'Demo Mode (Local)'}
+                </span>
               </div>
             </div>
           </div>
@@ -425,6 +472,11 @@ export default function Settings() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* OWNER OPERATIONS MODAL */}
+      {showOwnerModal && (
+        <OwnerControlsModal onClose={() => setShowOwnerModal(false)} />
       )}
 
     </div>

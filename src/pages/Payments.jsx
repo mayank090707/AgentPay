@@ -13,8 +13,10 @@ import {
 import { mockTransactions, mockContractSummary } from '../data/mockData';
 import StatusBadge from '../components/common/StatusBadge';
 import TransactionModal from '../components/common/TransactionModal';
+import { useBlockchain } from '../context/BlockchainContext';
 
 export default function Payments() {
+  const { budget, isContractConfigured } = useBlockchain();
   const [selectedTx, setSelectedTx] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
@@ -103,8 +105,13 @@ export default function Payments() {
             Total Spent
           </span>
           <div className="text-2xl font-black text-[#343434]">
-            ₹{mockContractSummary.totalSpent}.00
+            {budget ? `${budget.totalSpentEth} ETH` : `₹${mockContractSummary.totalSpent}.00`}
           </div>
+          {isContractConfigured && budget && (
+            <span className="text-[10px] font-bold text-[#3E8C5A] block mt-0.5">
+              Enforced on Sepolia
+            </span>
+          )}
         </div>
       </div>
 

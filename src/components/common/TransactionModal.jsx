@@ -1,12 +1,76 @@
-import React from 'react';
-import { X, ShieldCheck, ShieldAlert, Clock, Building, DollarSign, FileCode, ArrowDown, RefreshCw } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { 
+  X, 
+  ShieldCheck, 
+  ShieldAlert, 
+  Clock, 
+  Building, 
+  DollarSign, 
+  FileCode, 
+  ArrowDown, 
+  RefreshCw,
+  ExternalLink,
+  CheckCircle2,
+  Info
+} from 'lucide-react';
 import StatusBadge from './StatusBadge';
+import { useBlockchain } from '../../context/BlockchainContext';
+import { isBytes32 } from '../../services/blockchain';
 
 export default function TransactionModal({ transaction, onClose }) {
   if (!transaction) return null;
 
+  const {
+    lookupPayment,
+    checkIsProcessed,
+    isContractConfigured,
+    blockExplorerUrl
+  } = useBlockchain();
+
+  const [onChainRecord, setOnChainRecord] = useState(null);
+  const [isOnChainLoading, setIsOnChainLoading] = useState(false);
+  const [onChainChecked, setOnChainChecked] = useState(false);
+
+  const rawReqId = transaction.request_id || transaction.requestId || '';
+  const isReqIdBytes32 = isBytes32(rawReqId);
   const isBlocked = transaction.delivery_status === 'Blocked';
-  const hasRetryInfo = transaction.request_id === 'A104';
+  const hasRetryInfo = rawReqId === 'A104';
+
+  // ── Query on-chain record for authentic bytes32 request IDs ─────────────────
+  useEffect(() => {
+    let isMounted = true;
+
+    async function fetchOnChainDetails() {
+      if (!isReqIdBytes32 || !isContractConfigured) {
+        setOnChainRecord(null);
+        setOnChainChecked(false);
+        return;
+      }
+
+      setIsOnChainLoading(true);
+      try {
+        const [payment, processed] = await Promise.all([
+          lookupPayment(rawReqId),
+          checkIsProcessed(rawReqId),
+        ]);
+
+        if (isMounted) {
+          setOnChainRecord({ payment, processed });
+          setOnChainChecked(true);
+        }
+      } catch (err) {
+        console.warn('[TransactionModal] On-chain lookup failed:', err);
+      } finally {
+        if (isMounted) setIsOnChainLoading(false);
+      }
+    }
+
+    fetchOnChainDetails();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [rawReqId, isReqIdBytes32, isContractConfigured, lookupPayment, checkIsProcessed]);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs animate-fadeIn select-none">
@@ -15,7 +79,7 @@ export default function TransactionModal({ transaction, onClose }) {
         <div className="px-6 py-4 border-b border-[#E9D8CC] flex items-center justify-between bg-white">
           <div className="flex items-center space-x-2">
             <span className="text-lg font-black text-[#343434]">
-              Request Details — #{transaction.request_id}
+              Request Details — #{rawReqId}
             </span>
           </div>
           <button
@@ -51,6 +115,39 @@ export default function TransactionModal({ transaction, onClose }) {
             </div>
           </div>
 
+          {/* Request ID Format Notice (Isolates Mock IDs from On-Chain bytes32) */}
+          {!isReqIdBytes32 ? (
+            <div className="p-3 bg-[#FFF8E7] border border-[#FFE082] rounded-2xl flex items-start space-x-2.5 text-xs text-[#7C5200]">
+              <Info className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+              <div>
+                <span className="font-bold block">Demo Fixture Identifier (#{rawReqId})</span>
+                <span className="text-[11px] text-gray-600 leading-relaxed block mt-0.5">
+                  This transaction is a simulated frontend UI fixture. Production AgentPay requests use canonical 32-byte hashes (<code>keccak256(UUID)</code>) for on-chain Sepolia verification.
+                </span>
+              </div>
+            </div>
+          ) : (
+            /* Authentic bytes32 Request ID Verified On-Chain */
+            <div className="p-3 bg-[#E8F5E9] border border-[#C8E6C9] rounded-2xl space-y-1.5 text-xs text-[#2E7D32]">
+              <div className="flex items-center justify-between">
+                <span className="font-bold flex items-center space-x-1.5">
+                  <CheckCircle2 className="w-4 h-4 text-[#2E7D32]" />
+                  <span>Canonical Protocol Request ID (bytes32)</span>
+                </span>
+                {isOnChainLoading && <span className="text-[10px] text-gray-500 animate-pulse">Checking Sepolia...</span>}
+              </div>
+              {onChainChecked && onChainRecord?.payment?.isVerifiedOnChain ? (
+                <p className="text-[11px] text-gray-700">
+                  ✓ Verified on-chain via AgentPay smart contract. Amount: <strong>{onChainRecord.payment.amountEth} ETH</strong>.
+                </p>
+              ) : onChainChecked ? (
+                <p className="text-[11px] text-gray-600">
+                  Request ID not found in current contract state or contract is unconfigured.
+                </p>
+              ) : null}
+            </div>
+          )}
+
           {/* SUCCESSFUL TRANSACTION CHAIN VISUALIZATION */}
           {!isBlocked ? (
             <div className="bg-white p-4 rounded-2xl border border-[#E9D8CC] space-y-3">
@@ -62,7 +159,9 @@ export default function TransactionModal({ transaction, onClose }) {
                 {/* Step 1: Request */}
                 <div className="p-2.5 bg-[#FFF9F5] border border-[#E9D8CC] rounded-xl flex justify-between items-center">
                   <span className="font-semibold text-gray-500">REQUEST</span>
-                  <code className="font-mono font-bold text-[#343434]">#{transaction.request_id}</code>
+                  <code className="font-mono font-bold text-[#343434] truncate max-w-[200px]" title={rawReqId}>
+                    #{rawReqId}
+                  </code>
                 </div>
                 
                 <div className="flex justify-center text-gray-300">
@@ -72,7 +171,9 @@ export default function TransactionModal({ transaction, onClose }) {
                 {/* Step 2: Payment */}
                 <div className="p-2.5 bg-[#FFF9F5] border border-[#E9D8CC] rounded-xl flex justify-between items-center">
                   <span className="font-semibold text-gray-500">PAYMENT</span>
-                  <span className="font-extrabold text-[#343434]">₹{transaction.amount.toFixed(2)}</span>
+                  <span className="font-extrabold text-[#343434]">
+                    {transaction.amount ? `₹${Number(transaction.amount).toFixed(2)}` : '0.00'}
+                  </span>
                 </div>
 
                 <div className="flex justify-center text-gray-300">
@@ -82,9 +183,22 @@ export default function TransactionModal({ transaction, onClose }) {
                 {/* Step 3: Transaction Hash */}
                 <div className="p-2.5 bg-[#FFF9F5] border border-[#E9D8CC] rounded-xl flex justify-between items-center">
                   <span className="font-semibold text-gray-500">TRANSACTION</span>
-                  <code className="font-mono text-[11px] text-[#55705C] bg-white px-2 py-0.5 rounded border border-[#E9D8CC] truncate max-w-[180px]">
-                    {transaction.payment_tx}
-                  </code>
+                  {transaction.payment_tx && transaction.payment_tx.startsWith('0x') && transaction.payment_tx.length === 66 ? (
+                    <a
+                      href={`${blockExplorerUrl}/tx/${transaction.payment_tx}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="font-mono text-[11px] text-[#2563EB] hover:underline flex items-center space-x-1 bg-white px-2 py-0.5 rounded border border-[#BBDEFB]"
+                      title="View on Sepolia Etherscan"
+                    >
+                      <span className="truncate max-w-[150px]">{transaction.payment_tx}</span>
+                      <ExternalLink className="w-3 h-3 shrink-0" />
+                    </a>
+                  ) : (
+                    <code className="font-mono text-[11px] text-[#55705C] bg-white px-2 py-0.5 rounded border border-[#E9D8CC] truncate max-w-[180px]">
+                      {transaction.payment_tx}
+                    </code>
+                  )}
                 </div>
 
                 <div className="flex justify-center text-gray-300">
@@ -104,7 +218,7 @@ export default function TransactionModal({ transaction, onClose }) {
                 {/* Step 5: Content Hash */}
                 <div className="p-2.5 bg-[#FFF9F5] border border-[#E9D8CC] rounded-xl flex justify-between items-center">
                   <span className="font-semibold text-gray-500">CONTENT HASH</span>
-                  <code className="font-mono text-[11px] text-gray-700 bg-white px-2 py-0.5 rounded border border-[#E9D8CC] truncate max-w-[180px]">
+                  <code className="font-mono text-[11px] text-gray-700 bg-white px-2 py-0.5 rounded border border-[#E9D8CC] truncate max-w-[180px]" title={transaction.content_hash}>
                     {transaction.content_hash}
                   </code>
                 </div>
@@ -120,11 +234,13 @@ export default function TransactionModal({ transaction, onClose }) {
               <div className="grid grid-cols-2 gap-3 text-xs">
                 <div className="p-3 bg-[#FFF9F5] border border-[#E9D8CC] rounded-xl">
                   <span className="text-gray-400 block text-[10px]">Request ID</span>
-                  <span className="font-bold text-[#343434]">#{transaction.request_id}</span>
+                  <span className="font-bold text-[#343434]">#{rawReqId}</span>
                 </div>
                 <div className="p-3 bg-[#FFF9F5] border border-[#E9D8CC] rounded-xl">
                   <span className="text-gray-400 block text-[10px]">Requested Amount</span>
-                  <span className="font-extrabold text-[#C94C4C]">₹{transaction.amount.toFixed(2)}</span>
+                  <span className="font-extrabold text-[#C94C4C]">
+                    ₹{Number(transaction.amount || 0).toFixed(2)}
+                  </span>
                 </div>
                 <div className="p-3 bg-[#FFF9F5] border border-[#E9D8CC] rounded-xl">
                   <span className="text-gray-400 block text-[10px]">Reason</span>
@@ -191,7 +307,7 @@ export default function TransactionModal({ transaction, onClose }) {
                 </div>
                 <div>
                   <span className="text-gray-500 block">Retry Attempt:</span>
-                  <span className="font-semibold">Same Request ID (#{transaction.request_id})</span>
+                  <span className="font-semibold">Same Request ID (#{rawReqId})</span>
                 </div>
                 <div>
                   <span className="text-gray-500 block">Additional Charge:</span>
@@ -199,7 +315,7 @@ export default function TransactionModal({ transaction, onClose }) {
                 </div>
               </div>
               <p className="text-[10px] text-gray-600 font-serif italic pt-1 border-t border-[#BBDEFB]">
-                Result: Duplicate payment prevented by smart contract on-chain state.
+                Result: Duplicate payment prevented by smart contract on-chain state (isProcessed = true).
               </p>
             </div>
           )}

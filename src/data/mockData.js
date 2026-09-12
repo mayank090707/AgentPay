@@ -21,7 +21,11 @@ export const mockContractSummary = {
   blockedTransactions: 2,
   currency: "₹",
   enforcedBySmartContract: true,
-  contractAddress: "0x742d35Cc6634C0532925a3b844Bc454e4438f44e",
+  // NOTE: contractAddress here is a placeholder for display purposes only.
+  // The real address is set via VITE_CONTRACT_ADDRESS in .env and used by
+  // src/config/blockchain.config.js → BLOCKCHAIN_CONFIG.contractAddress.
+  // Phase 2 will replace this mock summary entirely with live contract data.
+  contractAddress: import.meta.env.VITE_CONTRACT_ADDRESS || "0x<CONTRACT_ADDRESS_NOT_CONFIGURED>",
   network: "Sepolia Connected",
   walletAddress: "0x3A8F...91B2"
 };

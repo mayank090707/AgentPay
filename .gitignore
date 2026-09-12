@@ -6,3 +6,13 @@ venv/
 .env
 .env.*
 !.env.example
+
+# Node / Hardhat
+node_modules/
+contracts/node_modules/
+contracts/artifacts/
+contracts/cache/
+
+# Databases & local state
+*.db
+backend/*.db

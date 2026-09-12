@@ -16,6 +16,7 @@ PHASE 2A ARCHITECTURAL BOUNDARIES:
 
 from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
+import json
 from typing import Any, Optional
 
 import httpx
@@ -130,13 +131,18 @@ class ProviderClient:
         clean_path = endpoint_path.strip().lstrip("/")
         target_url = f"{clean_base}/{clean_path}"
 
-        payload: dict[str, Any] = {
-            "request_id": req_id_str,
-            "service": service_request.service,
-            "payload": service_request.payload,
-        }
-        if service_request.parameters:
-            payload["parameters"] = service_request.parameters
+        if isinstance(service_request.payload, dict) and any(
+            k in service_request.payload for k in ("text", "operation", "key")
+        ):
+            payload: dict[str, Any] = dict(service_request.payload)
+        else:
+            payload = {
+                "request_id": req_id_str,
+                "service": service_request.service,
+                "payload": service_request.payload,
+            }
+            if service_request.parameters:
+                payload["parameters"] = service_request.parameters
 
         headers = {
             "Content-Type": "application/json",
@@ -161,6 +167,93 @@ class ProviderClient:
         except httpx.RequestError as exc:
             raise ProviderError(
                 f"Provider communication failed: {str(exc)}",
+                code="NETWORK_ERROR",
+                request_id=req_id_str,
+                details={"target_url": target_url, "error_type": exc.__class__.__name__},
+            ) from exc
+
+        return self._process_response(response, service_request)
+
+    def paid_request_service(
+        self,
+        service_request: ServiceRequest,
+        quote_id: str,
+        tx_hash: str,
+        payer_address: str,
+        endpoint_path: Optional[str] = None,
+    ) -> ProviderResponse:
+        """
+        Resubmit the service request with X-Payment-Proof header after on-chain payment.
+
+        ARCHITECTURAL RULES:
+        - Must include X-Request-ID with the EXACT same request_id.
+        - Must include X-Payment-Proof with quote_id, tx_hash, and payer_address.
+        - Returned request_id is validated against service_request.request_id.
+        - Preserves zero-cost idempotent replay if already delivered.
+        """
+        req_id_str = str(service_request.request_id)
+
+        if not endpoint_path or not endpoint_path.strip():
+            raise ConfigurationError(
+                "Provider endpoint_path must be explicitly provided for paid service request",
+                code="MISSING_ENDPOINT_PATH",
+                details={"service": service_request.service, "request_id": req_id_str},
+            )
+
+        if not self.base_url:
+            raise ConfigurationError(
+                "Provider base_url is not configured",
+                code="MISSING_PROVIDER_URL",
+                details={"request_id": req_id_str},
+            )
+
+        clean_base = self.base_url.rstrip("/")
+        clean_path = endpoint_path.strip().lstrip("/")
+        target_url = f"{clean_base}/{clean_path}"
+
+        proof_payload = {
+            "quote_id": quote_id,
+            "tx_hash": tx_hash,
+            "payer_address": payer_address,
+        }
+
+        headers = {
+            "Content-Type": "application/json",
+            "X-Request-ID": req_id_str,
+            "X-Payment-Proof": json.dumps(proof_payload),
+        }
+
+        if isinstance(service_request.payload, dict) and any(
+            k in service_request.payload for k in ("text", "operation", "key")
+        ):
+            payload = dict(service_request.payload)
+        else:
+            payload = {
+                "request_id": req_id_str,
+                "service": service_request.service,
+                "payload": service_request.payload,
+            }
+            if service_request.parameters:
+                payload["parameters"] = service_request.parameters
+
+        try:
+            if self._http_client is not None:
+                response = self._http_client.post(
+                    target_url,
+                    json=payload,
+                    headers=headers,
+                    timeout=self.timeout,
+                )
+            else:
+                with httpx.Client(timeout=self.timeout) as client:
+                    response = client.post(
+                        target_url,
+                        json=payload,
+                        headers=headers,
+                    )
+        except httpx.RequestError as exc:
+            raise ProviderError(
+                f"Provider communication failed during paid retry: {str(exc)}",
                 code="NETWORK_ERROR",
                 request_id=req_id_str,
                 details={"target_url": target_url, "error_type": exc.__class__.__name__},
@@ -273,16 +366,46 @@ class ProviderClient:
                 details={"returned_request_id": returned_id},
             )
 
+        # Normalize payment fields supporting both generic and Person 3 specifications
+        payment_address = (
+            data.get("payment_address")
+            or data.get("pay_to_address")
+            or response.headers.get("X-Payment-Address")
+        )
+        provider_name = (
+            data.get("provider")
+            or data.get("provider_id")
+            or service_request.provider
+            or data.get("service_type")
+            or "provider"
+        )
+        currency_name = (
+            data.get("currency")
+            or response.headers.get("X-Payment-Asset")
+            or "ETH"
+        )
+        quote_id = (
+            data.get("quote_id")
+            or response.headers.get("X-Payment-Quote-Id")
+            or ""
+        )
+
         # Validate required payment fields
-        required_fields = ["amount", "currency", "provider", "payment_address"]
-        for field in required_fields:
-            if field not in data or data[field] is None or str(data[field]).strip() == "":
-                raise InvalidPaymentRequirementError(
-                    f"HTTP 402 response missing required payment field '{field}'",
-                    code="MISSING_PAYMENT_FIELD",
-                    request_id=req_id_str,
-                    details={"missing_field": field},
-                )
+        if not payment_address:
+            raise InvalidPaymentRequirementError(
+                "HTTP 402 response missing required payment field 'payment_address' (or 'pay_to_address')",
+                code="MISSING_PAYMENT_FIELD",
+                request_id=req_id_str,
+                details={"missing_field": "payment_address"},
+            )
+
+        if "amount" not in data or data["amount"] is None or str(data["amount"]).strip() == "":
+            raise InvalidPaymentRequirementError(
+                "HTTP 402 response missing required payment field 'amount'",
+                code="MISSING_PAYMENT_FIELD",
+                request_id=req_id_str,
+                details={"missing_field": "amount"},
+            )
 
         # Parse and validate amount
         try:
@@ -297,14 +420,23 @@ class ProviderClient:
                 details={"amount_raw": data.get("amount")},
             ) from exc
 
+        # Construct metadata preserving quote_id and expiry
+        meta = dict(data.get("metadata") or {})
+        if quote_id:
+            meta["quote_id"] = quote_id
+        if data.get("expires_at"):
+            meta["expires_at"] = data.get("expires_at")
+        if data.get("service_type"):
+            meta["service_type"] = data.get("service_type")
+
         payment_req = PaymentRequirement(
             request_id=service_request.request_id,
             amount=amount,
-            currency=str(data["currency"]).strip(),
-            provider=str(data["provider"]).strip(),
-            payment_address=str(data["payment_address"]).strip(),
+            currency=str(currency_name).strip(),
+            provider=str(provider_name).strip(),
+            payment_address=str(payment_address).strip(),
             network=str(data["network"]).strip() if data.get("network") else None,
-            metadata=data.get("metadata") if isinstance(data.get("metadata"), dict) else None,
+            metadata=meta,
         )
 
         return ProviderResponse(

@@ -203,3 +203,47 @@ def test_existing_routes_unaffected(client: TestClient):
 
     resp_audit = client.get("/audit/logs")
     assert resp_audit.status_code == 200
+
+
+# 13. Valid budget comparison: 0.00013 ETH planned vs 0.0100 ETH remaining -> NOT BLOCKED
+def test_valid_budget_comparison_not_blocked(client: TestClient):
+    response = client.post("/agent/run", json={
+        "prompt": "Translate 'Hello World' into Hindi and store the result",
+        "max_budget_eth": 0.0100
+    })
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "PLANNED"
+    assert data["total_planned_cost_eth"] < 0.0100
+    assert data["error_code"] is None
+
+
+# 14. Exact budget boundary: max_budget_eth equal to planned cost -> NOT BLOCKED
+def test_exact_budget_boundary_not_blocked(client: TestClient):
+    # First plan to get exact planned cost
+    resp1 = client.post("/agent/run", json={"prompt": "Translate this text"})
+    planned_cost = resp1.json()["total_planned_cost_eth"]
+
+    # Submit with max_budget_eth set to exact planned cost
+    resp2 = client.post("/agent/run", json={
+        "prompt": "Translate this text",
+        "max_budget_eth": planned_cost
+    })
+    assert resp2.status_code == 200
+    data = resp2.json()
+    assert data["status"] == "PLANNED"
+    assert data["error_code"] is None
+
+
+# 15. Task persistence and retrieval via GET /agent/run/{task_id}
+def test_get_agent_run_task_retrieval(client: TestClient):
+    post_resp = client.post("/agent/run", json={"prompt": "Translate text and store it"})
+    task_id = post_resp.json()["task_id"]
+
+    get_resp = client.get(f"/agent/run/{task_id}")
+    assert get_resp.status_code == 200
+    data = get_resp.json()
+    assert data["task_id"] == task_id
+    assert data["user_prompt"] == "Translate text and store it"
+    assert data["status"] == "PLANNED"
+    assert len(data["plan"]) == 2

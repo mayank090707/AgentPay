@@ -107,29 +107,69 @@ export default function Agent() {
     };
   }, [refreshBlockchain]);
 
-  // Load specific task if task_id passed in URL query
+  // Load specific task from URL query or localStorage on mount
   useEffect(() => {
-    const taskIdParam = searchParams.get('task_id');
+    const taskIdParam = searchParams.get('task_id') || localStorage.getItem('agentpay_active_task_id');
     if (taskIdParam) {
       loadTaskStatus(taskIdParam);
     }
   }, [searchParams]);
 
+  // Polling for live status while executing
+  useEffect(() => {
+    let interval = null;
+    const activeTaskId = currentRun?.task_id || localStorage.getItem('agentpay_active_task_id');
+    if (activeTaskId && (runState === 'RUNNING' || isExecuting)) {
+      interval = setInterval(() => {
+        loadTaskStatus(activeTaskId);
+      }, 1500);
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [currentRun?.task_id, runState, isExecuting]);
+
   async function loadTaskStatus(taskId) {
+    if (!taskId) return;
     try {
       const run = await fetchAgentRun(taskId);
       if (run) {
         setCurrentRun(run);
-        if (run.status === 'COMPLETED') setRunState('COMPLETED');
-        else if (run.status === 'BLOCKED') setRunState('BLOCKED');
-        else if (run.status === 'FAILED') setRunState('FAILED');
-        else if (run.status === 'EXECUTING') setRunState('RUNNING');
-        else setRunState('IDLE');
+        if (run.user_prompt) setPrompt(run.user_prompt);
+        localStorage.setItem('agentpay_active_task_id', run.task_id);
+
+        if (run.status === 'COMPLETED') {
+          setRunState('COMPLETED');
+          setIsExecuting(false);
+        } else if (run.status === 'BLOCKED') {
+          setRunState('BLOCKED');
+          setErrorMsg(run.error_message || "Agent Run blocked by smart contract budget limit");
+          setIsExecuting(false);
+        } else if (run.status === 'FAILED') {
+          setRunState('FAILED');
+          setErrorMsg(run.error_message || "Agent Run execution failed");
+          setIsExecuting(false);
+        } else if (run.status === 'EXECUTING' || run.status === 'PLANNED' || run.status === 'PLANNING') {
+          setRunState('RUNNING');
+          setIsExecuting(true);
+        } else {
+          setRunState('IDLE');
+          setIsExecuting(false);
+        }
       }
     } catch (err) {
       console.warn("Could not load agent run:", err);
     }
   }
+
+  // Clear current active task to start fresh
+  const handleClearTask = () => {
+    localStorage.removeItem('agentpay_active_task_id');
+    setCurrentRun(null);
+    setRunState('IDLE');
+    setErrorMsg(null);
+    setPrompt("Translate 'Hello World' into Hindi and store the result.");
+  };
 
   // Calculate live budget metrics identical to Dashboard.jsx
   const totalBudgetEth = budget ? parseFloat(budget.budgetEth) : 0.01;
@@ -156,6 +196,7 @@ export default function Agent() {
 
       if (res && res.task_id) {
         setCurrentRun(res);
+        localStorage.setItem('agentpay_active_task_id', res.task_id);
 
         if (res.status === 'COMPLETED') {
           setRunState('COMPLETED');
@@ -301,6 +342,18 @@ export default function Agent() {
                 </>
               )}
             </button>
+
+            {currentRun && !isExecuting && (
+              <button
+                type="button"
+                onClick={handleClearTask}
+                className="px-4 py-3.5 bg-white border border-[#E9D8CC] hover:bg-gray-50 text-gray-700 font-bold text-xs rounded-2xl transition-all shadow-xs flex items-center justify-center space-x-1.5 cursor-pointer shrink-0"
+                title="Start a new Agent Run task"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                <span>New Goal</span>
+              </button>
+            )}
           </div>
         </form>
 

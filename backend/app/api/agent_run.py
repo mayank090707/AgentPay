@@ -5,6 +5,7 @@ import re
 import time
 import uuid
 from datetime import datetime
+from decimal import Decimal
 from typing import Dict, Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -63,16 +64,16 @@ def get_remaining_contract_budget(db: Session) -> float:
     if cc:
         try:
             status_dict = cc.get_budget_status()
-            remaining_wei = float(status_dict["remaining"])
-            return max(0.0, remaining_wei / 1e18)
+            remaining_wei = Decimal(str(status_dict["remaining"]))
+            return float(remaining_wei / Decimal(10**18))
         except Exception as e:
             logger.warning(f"Contract get_budget_status query failed: {e}")
 
     # Fallback to hard cap minus paid DB quotes
-    hard_cap = getattr(settings, "HARD_CAP_ETH", 0.05)
+    hard_cap = Decimal(str(getattr(settings, "HARD_CAP_ETH", 0.05)))
     paid_quotes = db.query(Quote).filter(Quote.status == QuoteStatus.PAID).all()
-    spent = sum(q.amount for q in paid_quotes)
-    return max(0.0, hard_cap - spent)
+    spent = sum(Decimal(str(q.amount)) for q in paid_quotes)
+    return float(max(Decimal(0), hard_cap - spent))
 
 
 def _extract_translation_text(prompt: str) -> str:
@@ -298,23 +299,49 @@ def execute_agent_run_task(agent_run: AgentRun, db: Session) -> AgentRun:
         except Exception as e:
             logger.error(f"Error executing step {step.step_number} in task {agent_run.task_id}: {e}")
             err_msg = str(e)
-            step.status = AgentRunStepStatus.BLOCKED
-            step.error_code = "EXECUTION_FAILED"
+            err_type = type(e).__name__
+            err_msg_lower = err_msg.lower()
+
+            if "budget" in err_msg_lower or "0x028d7b37" in err_msg_lower or "hardcap" in err_msg_lower or err_type == "BudgetExceededError":
+                err_code = "BUDGET_EXCEEDED"
+                run_status = AgentRunStatus.BLOCKED
+            elif "revert" in err_msg_lower or "contract" in err_msg_lower or err_type in ["ContractError", "ContractLogicError"]:
+                err_code = "SMART_CONTRACT_REVERT"
+                run_status = AgentRunStatus.FAILED
+            elif "provider" in err_msg_lower or "402" in err_msg_lower or err_type == "ProviderError":
+                err_code = "PROVIDER_ERROR"
+                run_status = AgentRunStatus.FAILED
+            elif "tx" in err_msg_lower or "broadcast" in err_msg_lower or err_type in ["PaymentAuthorizationError", "PaymentTransactionError"]:
+                err_code = "PAYMENT_ERROR"
+                run_status = AgentRunStatus.FAILED
+            elif "404" in err_msg_lower or "not found" in err_msg_lower:
+                err_code = "NOT_FOUND"
+                run_status = AgentRunStatus.FAILED
+            elif err_type in ["TypeError", "KeyError", "AttributeError", "RuntimeError", "ValueError"]:
+                err_code = "EXECUTION_ERROR"
+                run_status = AgentRunStatus.FAILED
+            else:
+                err_code = "UNKNOWN_ERROR"
+                run_status = AgentRunStatus.FAILED
+
+            step.status = AgentRunStepStatus.BLOCKED if run_status == AgentRunStatus.BLOCKED else AgentRunStepStatus.FAILED
+            step.error_code = err_code
             step.error_message = err_msg
 
-            agent_run.status = AgentRunStatus.BLOCKED
-            agent_run.error_code = "BUDGET_EXCEEDED" if "budget" in err_msg.lower() else "STEP_EXECUTION_FAILED"
+            agent_run.status = run_status
+            agent_run.error_code = err_code
             agent_run.error_message = err_msg
             db.commit()
 
             log_audit_event(
                 db=db,
                 request_id=agent_run.task_id,
-                event_type="AGENT_RUN_BLOCKED",
+                event_type="AGENT_RUN_BLOCKED" if run_status == AgentRunStatus.BLOCKED else "AGENT_RUN_FAILED",
                 details={
                     "task_id": agent_run.task_id,
                     "failed_step": step.step_number,
                     "service": step.service,
+                    "error_code": err_code,
                     "error": err_msg,
                     "timestamp": datetime.utcnow().isoformat() + "Z"
                 }

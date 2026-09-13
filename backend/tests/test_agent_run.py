@@ -12,6 +12,7 @@ from backend.app.main import app
 from backend.app.database import Base, get_db
 import backend.app.models  # noqa: F401
 from backend.app.models.agent_run import AgentRun, AgentRunStep, AgentRunStatus, AgentRunStepStatus
+import backend.app.api.agent_run as agent_run_module
 
 # In-memory SQLite for testing with StaticPool
 SQLALCHEMY_TEST_DATABASE_URL = "sqlite:///:memory:"
@@ -24,17 +25,6 @@ engine = create_engine(
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
-def override_get_db():
-    db = TestingSessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
-
-
-app.dependency_overrides[get_db] = override_get_db
-
-
 @pytest.fixture(autouse=True)
 def setup_db():
     Base.metadata.create_all(bind=engine)
@@ -44,7 +34,23 @@ def setup_db():
 
 @pytest.fixture
 def client():
-    return TestClient(app)
+    """Provide a TestClient with the in-memory DB override set and torn down per-test."""
+    def override_get_db():
+        db = TestingSessionLocal()
+        try:
+            yield db
+        finally:
+            db.close()
+
+    # Patch both the request-scoped dependency and the background-task SessionLocal
+    app.dependency_overrides[get_db] = override_get_db
+    original_session_local = agent_run_module.SessionLocal
+    agent_run_module.SessionLocal = TestingSessionLocal
+    try:
+        yield TestClient(app)
+    finally:
+        app.dependency_overrides.pop(get_db, None)
+        agent_run_module.SessionLocal = original_session_local
 
 
 # 1. Valid translation goal

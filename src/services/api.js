@@ -149,49 +149,67 @@ export function parseAuditLogsToTransactions(logs = []) {
 
   const transactions = [];
 
+  const providerNameMap = {
+    'alpha': 'Alpha Cloud',
+    'alpha-cloud': 'Alpha Cloud',
+    'beta': 'Beta Cloud',
+    'beta-cloud': 'Beta Cloud',
+    'gamma': 'Gamma Storage',
+    'gamma-storage': 'Gamma Storage',
+    'delta': 'Delta AI',
+    'delta-ai': 'Delta AI',
+  };
+
   Object.entries(grouped).forEach(([reqId, reqLogs]) => {
     // Sort logs chronologically
     reqLogs.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
 
-    let service = 'Unknown Service';
-    let provider = 'Unknown Provider';
+    let rawService = 'translation';
+    let rawProvider = 'alpha';
     let amount = 0;
-    let amountEth = '0.00';
+    let amountEth = '0.00 ETH';
     let paymentTx = 'N/A';
     let deliveryStatus = 'Processing';
     let contentHash = 'N/A';
-    let timestamp = reqLogs[0]?.timestamp ? new Date(reqLogs[0].timestamp).toLocaleTimeString() : 'N/A';
-    let date = reqLogs[0]?.timestamp ? new Date(reqLogs[0].timestamp).toISOString().split('T')[0] : 'N/A';
+    let firstTimestamp = reqLogs[0]?.timestamp;
+    let timestamp = firstTimestamp ? new Date(firstTimestamp).toLocaleTimeString() : 'N/A';
+    let date = firstTimestamp ? new Date(firstTimestamp).toISOString().split('T')[0] : 'N/A';
     let error = null;
 
     reqLogs.forEach((log) => {
       const evt = log.event_type;
       const details = log.details || {};
 
-      if (evt === 'QUOTE_CREATED') {
-        service = details.service_type || details.service || service;
-        provider = details.provider_id || details.provider || provider;
-        amount = details.amount || amount;
-        if (details.currency === 'ETH') {
-          amountEth = `${amount} ETH`;
+      if (details.service_type || details.service) {
+        rawService = details.service_type || details.service;
+      }
+
+      if (details.provider_id || details.provider) {
+        rawProvider = details.provider_id || details.provider;
+      }
+
+      if (details.amount) {
+        amount = details.amount;
+        amountEth = `${amount} ETH`;
+      }
+
+      if (evt === 'PAYMENT_VERIFIED' || evt === 'PAYMENT_CONFIRMED' || evt === 'SMART_CONTRACT_AUTHORIZATION' || evt === 'PAYMENT_AUTHORIZED') {
+        if (details.tx_hash || details.payment_tx) {
+          paymentTx = details.tx_hash || details.payment_tx;
         }
       }
 
-      if (evt === 'PAYMENT_VERIFIED' || evt === 'SMART_CONTRACT_AUTHORIZATION' || evt === 'PAYMENT_AUTHORIZED') {
-        paymentTx = details.tx_hash || details.payment_tx || paymentTx;
-        amount = details.amount || details.amountEth || amount;
-        if (typeof amount === 'number') {
-          amountEth = `${amount} ETH`;
-        }
-      }
-
-      if (evt === 'SERVICE_DELIVERED' || evt === 'DELIVERY_RECORDED') {
+      if (evt === 'SERVICE_DELIVERED' || evt === 'DELIVERY_RECORDED' || evt === 'TASK_COMPLETED') {
         deliveryStatus = 'Delivered';
-        contentHash = details.content_hash || details.hash || contentHash;
-        if (details.tx_hash) paymentTx = details.tx_hash;
+        if (details.content_hash || details.hash) {
+          contentHash = details.content_hash || details.hash;
+        }
+        if (details.tx_hash) {
+          paymentTx = details.tx_hash;
+        }
       }
 
-      if (evt === 'BUDGET_EXCEEDED' || evt === 'PAYMENT_FAILED' || evt === 'PAYMENT_REJECTED') {
+      if (evt === 'BUDGET_EXCEEDED' || evt === 'PAYMENT_FAILED' || evt === 'PAYMENT_REJECTED' || evt === 'PAYMENT_VERIFICATION_FAILED') {
         deliveryStatus = 'Blocked';
         error = details.reason || details.error || details.message || 'Payment blocked by contract budget enforcement';
         paymentTx = details.tx_hash || '0x000...REJECTED';
@@ -199,10 +217,14 @@ export function parseAuditLogsToTransactions(logs = []) {
       }
     });
 
+    const formattedProvider = providerNameMap[rawProvider.toLowerCase()] || 
+      (rawProvider.charAt(0).toUpperCase() + rawProvider.slice(1));
+    const formattedService = rawService.charAt(0).toUpperCase() + rawService.slice(1);
+
     transactions.push({
       request_id: reqId,
-      service: service.charAt(0).toUpperCase() + service.slice(1),
-      provider: provider.charAt(0).toUpperCase() + provider.slice(1),
+      service: formattedService,
+      provider: formattedProvider,
       amount: typeof amount === 'number' ? amount : parseFloat(amount) || 0,
       amountEth: amountEth || `${amount} ETH`,
       payment_tx: paymentTx,

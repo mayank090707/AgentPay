@@ -5,7 +5,9 @@ import StatusBadge from './StatusBadge';
 export default function TransactionModal({ transaction, onClose }) {
   if (!transaction) return null;
 
-  const isBlocked = transaction.delivery_status === 'Blocked';
+  const isDelivered = transaction.delivery_status === 'Delivered' || transaction.delivery_status === 'Fulfilled';
+  const isBlocked = transaction.delivery_status === 'Blocked' || transaction.delivery_status === 'Failed';
+  const isProcessing = !isDelivered && !isBlocked;
   const hasRetryInfo = transaction.request_id === 'A104';
 
   return (
@@ -30,28 +32,38 @@ export default function TransactionModal({ transaction, onClose }) {
         <div className="p-6 space-y-4 max-h-[80vh] overflow-y-auto">
           {/* Top Status Banner */}
           <div className={`p-4 rounded-2xl border flex items-center space-x-3 ${
-            isBlocked 
+            isDelivered
+              ? 'bg-[#E8F5E9] border-[#C8E6C9] text-[#3E8C5A]'
+              : isBlocked 
               ? 'bg-[#FFEBEE] border-[#FFCDD2] text-[#C94C4C]' 
-              : 'bg-[#E8F5E9] border-[#C8E6C9] text-[#3E8C5A]'
+              : 'bg-[#E3F2FD] border-[#BBDEFB] text-[#1E3A8A]'
           }`}>
-            {isBlocked ? (
+            {isDelivered ? (
+              <ShieldCheck className="w-6 h-6 shrink-0" />
+            ) : isBlocked ? (
               <ShieldAlert className="w-6 h-6 shrink-0" />
             ) : (
-              <ShieldCheck className="w-6 h-6 shrink-0" />
+              <Clock className="w-6 h-6 shrink-0 animate-spin text-[#2563EB]" />
             )}
             <div>
               <div className="font-extrabold text-sm">
-                {isBlocked ? 'Payment Rejected by Smart Contract' : 'Transaction Approved & Delivered'}
+                {isDelivered 
+                  ? 'Transaction Approved & Delivered' 
+                  : isBlocked 
+                  ? 'Payment Rejected by Smart Contract' 
+                  : 'Transaction Processing'}
               </div>
               <div className="text-xs opacity-90 font-medium">
-                {isBlocked 
+                {isDelivered 
+                  ? 'Payment verified by HTTP 402 flow and delivery proof recorded on-chain.' 
+                  : isBlocked 
                   ? 'Smart contract detected spending limit violation (BUDGET_EXCEEDED).' 
-                  : 'Payment verified by HTTP 402 flow and delivery proof recorded on-chain.'}
+                  : 'Payment or service delivery is currently in progress across agent nodes.'}
               </div>
             </div>
           </div>
 
-          {/* SUCCESSFUL TRANSACTION CHAIN VISUALIZATION */}
+          {/* SUCCESSFUL / PROCESSING TRANSACTION CHAIN VISUALIZATION */}
           {!isBlocked ? (
             <div className="bg-white p-4 rounded-2xl border border-[#E9D8CC] space-y-3">
               <span className="text-[10px] font-mono uppercase tracking-widest font-bold text-gray-400 block">

@@ -55,8 +55,7 @@ export default function Dashboard() {
           setTransactions(parsedTx);
           setIsBackendLive(true);
         } else {
-          // Fallback to demo transactions if backend audit table is unpopulated
-          setTransactions(mockTransactions);
+          setTransactions([]);
           setIsBackendLive(false);
         }
 
@@ -75,12 +74,12 @@ export default function Dashboard() {
           });
           setBackendProviders(formatted);
         } else {
-          setBackendProviders(mockProviders);
+          setBackendProviders([]);
         }
       } catch (err) {
         if (isMounted) {
-          setTransactions(mockTransactions);
-          setBackendProviders(mockProviders);
+          setTransactions([]);
+          setBackendProviders([]);
           setIsBackendLive(false);
         }
       } finally {

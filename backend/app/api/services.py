@@ -238,6 +238,7 @@ def handle_service_execution(
             details={
                 "quote_id": quote.id,
                 "service_type": service_type,
+                "provider_id": provider_id or "alpha",
                 "amount": quote_amount,
                 "currency": "ETH",
                 "expires_at": expires_at.isoformat()
@@ -642,23 +643,30 @@ def purchase_service_endpoint(
 
         result = orchestrator.run(service_req, endpoint_path=endpoint_path)
 
+        now_iso = datetime.utcnow().isoformat() + "Z"
         return {
             "status": "success",
             "request_id": str(result.request_id),
             "service": service_type,
+            "service_type": service_type,
             "provider": provider_id,
+            "provider_id": provider_id,
             "amount": float(result.amount),
             "transaction_hash": result.payment_reference,
             "payment_status": "CONFIRMED",
             "delivery_status": "FULFILLED",
             "content_hash": result.content_hash,
+            "timestamp": now_iso,
             "receipt": {
                 "request_id": str(result.request_id),
                 "provider": result.provider,
+                "provider_id": provider_id,
+                "service": service_type,
                 "amount": float(result.amount),
                 "currency": result.currency,
                 "tx_hash": result.payment_reference,
                 "content_hash": result.content_hash,
+                "timestamp": now_iso,
             }
         }
     except BudgetExceededError as e:

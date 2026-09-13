@@ -15,6 +15,7 @@ ARCHITECTURAL PRINCIPLES:
 from decimal import Decimal
 import json
 from pathlib import Path
+import time
 from typing import Any, Dict, Optional, Union
 
 from hexbytes import HexBytes
@@ -321,7 +322,7 @@ class ContractClient:
         try:
             logger.info("[CONTRACT CALL START] request_id=%s amount_wei=%d provider=%s service=%s", req_id_str, amount_wei, checksum_provider, service)
             nonce = self.w3.eth.get_transaction_count(self.agent_address, "pending")
-            gas_price = self.w3.eth.gas_price
+            gas_price = int(self.w3.eth.gas_price * 1.15)
 
             tx_data = self.contract.functions.authorizePayment(
                 req_b32,
@@ -376,7 +377,7 @@ class ContractClient:
         # Await transaction receipt
         try:
             logger.info("[CONTRACT RECEIPT WAIT] tx_hash=%s request_id=%s", tx_hash_hex, req_id_str)
-            receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash, timeout=180)
+            receipt = self._wait_for_receipt_resilient(tx_hash, timeout=180)
             if receipt.get("status") == 0:
                 # Transaction mined but reverted
                 raise PaymentAuthorizationError(
@@ -388,14 +389,6 @@ class ContractClient:
             logger.info("[CONTRACT CONFIRMED] tx_hash=%s request_id=%s status=%s", tx_hash_hex, req_id_str, receipt.get("status"))
         except PaymentAuthorizationError:
             raise
-        except Exception as exc:
-            raise PaymentTransactionError(
-                f"Error waiting for transaction receipt: {str(exc)}",
-                code="RECEIPT_TIMEOUT",
-                request_id=req_id_str,
-                details={"tx_hash": tx_hash_hex},
-            ) from exc
-
         amount_eth = Decimal(amount_wei) / Decimal(10**18)
         return PaymentResult(
             request_id=RequestId(req_id_str),
@@ -403,6 +396,22 @@ class ContractClient:
             status=PaymentStatus.CONFIRMED,
             transaction_hash=tx_hash_hex,
         )
+
+    def _wait_for_receipt_resilient(self, tx_hash: Any, timeout: int = 180, poll_interval: float = 2.0) -> Dict[str, Any]:
+        tx_hash_bytes = HexBytes(tx_hash)
+        tx_hash_hex = tx_hash_bytes.to_0x_hex()
+        start_time = time.time()
+        receipt = None
+        while time.time() - start_time < timeout:
+            try:
+                receipt = self.w3.eth.get_transaction_receipt(tx_hash_bytes)
+                if receipt is not None:
+                    return receipt
+            except Exception as rx_err:
+                logger.warning("Transient error polling receipt for %s: %s", tx_hash_hex, rx_err)
+            time.sleep(poll_interval)
+        
+        raise TimeoutError(f"Transaction {tx_hash_hex} is not in the chain after {timeout} seconds")
 
     def record_delivery(
         self,
@@ -420,7 +429,7 @@ class ContractClient:
 
         try:
             nonce = self.w3.eth.get_transaction_count(self.agent_address, "pending")
-            gas_price = self.w3.eth.gas_price
+            gas_price = int(self.w3.eth.gas_price * 1.15)
 
             tx_data = self.contract.functions.recordDelivery(
                 req_b32,
@@ -446,7 +455,7 @@ class ContractClient:
             tx_hash_hex = HexBytes(tx_hash).to_0x_hex()
             logger.info("recordDelivery broadcast: tx_hash=%s request_id=%s", tx_hash_hex, req_id_str)
 
-            receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash, timeout=180)
+            receipt = self._wait_for_receipt_resilient(tx_hash, timeout=180)
             if receipt.get("status") == 0:
                 raise ContractError(
                     f"recordDelivery reverted on-chain: tx_hash={tx_hash_hex}",

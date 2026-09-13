@@ -75,7 +75,7 @@ def test_unknown_goal(planner: AgentPlanner):
 
 # 6. Provider discovery
 def test_provider_discovery(planner: AgentPlanner):
-    provider_id, quote = planner.find_lowest_quote_provider("translation")
+    provider_id, quote, *_ = planner.find_lowest_quote_provider("translation")
     assert provider_id in planner.provider_registry
     assert quote > 0.0
 
@@ -100,7 +100,7 @@ def test_lowest_valid_provider_selection():
     }
 
     planner = AgentPlanner(provider_registry=custom_registry)
-    provider_id, quote = planner.find_lowest_quote_provider("translation")
+    provider_id, quote, *_ = planner.find_lowest_quote_provider("translation")
 
     assert provider_id == "cheap_beta"
     assert quote == 0.0001

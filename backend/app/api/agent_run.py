@@ -184,9 +184,17 @@ def _execute_service_step(
             res_data = getattr(result_obj, "result_data", None) or getattr(result_obj, "result", None) or {}
             if hasattr(result_obj, "delivery_result") and result_obj.delivery_result:
                 res_data = result_obj.delivery_result.result or res_data
+            tx_hash_val = (
+                getattr(result_obj, "payment_reference", None)
+                or getattr(result_obj, "transaction_hash", None)
+                or getattr(result_obj, "tx_hash", None)
+            )
+            if not tx_hash_val and hasattr(result_obj, "result") and isinstance(result_obj.result, dict):
+                tx_hash_val = result_obj.result.get("tx_hash") or result_obj.result.get("transaction_hash")
+
             return {
                 "request_id": req_id_str,
-                "transaction_hash": getattr(result_obj, "payment_reference", None) or getattr(result_obj, "transaction_hash", None) or getattr(result_obj, "tx_hash", None) or "0x" + "1"*64,
+                "transaction_hash": tx_hash_val or "0x" + "1"*64,
                 "content_hash": getattr(result_obj, "content_hash", None) or "0x" + "0"*64,
                 "data": res_data,
                 "amount": step.quote_eth,
@@ -376,13 +384,20 @@ def execute_agent_run_task(agent_run: AgentRun, db: Session) -> AgentRun:
                 err_code = "UNKNOWN_ERROR"
                 run_status = AgentRunStatus.FAILED
 
-            step.status = AgentRunStepStatus.BLOCKED if run_status == AgentRunStatus.BLOCKED else AgentRunStepStatus.FAILED
-            step.error_code = err_code
-            step.error_message = err_msg
+            # Re-query fresh DB instances to ensure modifications persist cleanly after rollback
+            fresh_run = db.query(AgentRun).filter(AgentRun.task_id == agent_run.task_id).first()
+            fresh_step = db.query(AgentRunStep).filter(AgentRunStep.id == step.id).first()
 
-            agent_run.status = run_status
-            agent_run.error_code = err_code
-            agent_run.error_message = err_msg
+            if fresh_step:
+                fresh_step.status = AgentRunStepStatus.BLOCKED if run_status == AgentRunStatus.BLOCKED else AgentRunStepStatus.FAILED
+                fresh_step.error_code = err_code
+                fresh_step.error_message = err_msg
+
+            if fresh_run:
+                fresh_run.status = run_status
+                fresh_run.error_code = err_code
+                fresh_run.error_message = err_msg
+
             db.commit()
 
             log_audit_event(
@@ -398,7 +413,7 @@ def execute_agent_run_task(agent_run: AgentRun, db: Session) -> AgentRun:
                     "timestamp": datetime.utcnow().isoformat() + "Z"
                 }
             )
-            return agent_run
+            return fresh_run or agent_run
 
     agent_run.status = AgentRunStatus.COMPLETED
     agent_run.completed_at = datetime.utcnow()

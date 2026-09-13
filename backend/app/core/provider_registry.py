@@ -5,10 +5,10 @@ from typing import Dict, Optional
 @dataclass
 class ProviderPricing:
     """Per-service unit pricing for a provider."""
-    translation: float    # price_per_unit per 100 chars
-    compute: float        # price_per_unit per compute unit
-    storage: float        # price_per_unit per MB
-    summarization: float  # price_per_unit per 100 words
+    translation: float = 0.0    # price_per_unit per 100 chars
+    compute: float = 0.0        # price_per_unit per compute unit
+    storage: float = 0.0        # price_per_unit per MB
+    summarization: float = 0.0  # price_per_unit per 100 words
 
 
 @dataclass

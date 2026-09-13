@@ -588,7 +588,12 @@ def purchase_service_endpoint(
             PROVIDER_BASE_URL=provider_base_url,
         )
 
-        env_provider_url = (os.getenv("PROVIDER_BASE_URL") or os.getenv("PROVIDER_URL") or "").strip()
+        env_provider_url = (
+            os.getenv("PROVIDER_BASE_URL") 
+            or os.getenv("PROVIDER_URL") 
+            or os.getenv("RENDER_EXTERNAL_URL") 
+            or ""
+        ).strip()
         for path_suffix in ["/services/translation", "/services/translate", "/services/compute", "/services/storage", "/services"]:
             if env_provider_url.rstrip("/").endswith(path_suffix):
                 env_provider_url = env_provider_url.rstrip("/")[:-len(path_suffix)].rstrip("/")

@@ -56,13 +56,14 @@ export async function checkBackendHealth() {
  * @param {boolean} [autoExecute=true] - Whether to automatically execute planned steps
  * @returns {Promise<object>}
  */
-export async function runAgentGoal(prompt, maxBudgetEth = null, autoExecute = true) {
+export async function runAgentGoal(prompt, maxBudgetEth = null, autoExecute = true, agentMode = 'translation') {
   return await apiFetch('/agent/run', {
     method: 'POST',
     body: JSON.stringify({
       prompt,
       max_budget_eth: maxBudgetEth,
       auto_execute: autoExecute,
+      agent_mode: agentMode,
     }),
   });
 }

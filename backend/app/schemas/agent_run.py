@@ -5,9 +5,10 @@ from pydantic import BaseModel, Field
 
 class AgentRunRequest(BaseModel):
     """Payload for submitting a natural-language goal to the AI Agent Run engine."""
-    prompt: str = Field(..., description="Natural language user goal (e.g. 'Translate this text into Hindi and store it').")
+    prompt: str = Field(..., description="Natural language user goal or content to translate.")
     max_budget_eth: Optional[float] = Field(None, description="Optional spending limit requested by the user.")
     auto_execute: Optional[bool] = Field(False, description="Whether to automatically execute planned steps immediately after planning.")
+    agent_mode: Optional[str] = Field(None, description="Demo intent / mode (e.g. 'translation').")
 
 
 class AgentRunStepResponse(BaseModel):

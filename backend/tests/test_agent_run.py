@@ -207,3 +207,18 @@ def test_get_agent_run_task_retrieval(client: TestClient):
     assert data["user_prompt"] == "Translate text and store it"
     assert data["status"] == "PLANNED"
     assert len(data["plan"]) == 2
+
+
+# 16. Translation mode allows arbitrary text inputs like "hello world"
+def test_translation_mode_arbitrary_prompt(client: TestClient):
+    response = client.post("/agent/run", json={
+        "prompt": "hello world",
+        "agent_mode": "translation",
+        "auto_execute": False
+    })
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "PLANNED"
+    assert len(data["plan"]) == 1
+    assert data["plan"][0]["service"] == "translation"
+    assert data["plan"][0]["step"] == 1

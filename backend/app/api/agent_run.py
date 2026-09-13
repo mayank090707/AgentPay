@@ -79,15 +79,22 @@ def get_remaining_contract_budget(db: Session) -> float:
 
 def _extract_translation_text(prompt: str) -> str:
     """Helper to extract quote text or main text to translate from user prompt."""
+    if not prompt:
+        return "Hello World"
+    match = re.search(r"(?i)Translate ['\"](.*?)['\"] into Hindi", prompt)
+    if match:
+        return match.group(1)
+    match = re.search(r"(?i)Translate (.*?) into Hindi", prompt)
+    if match:
+        return match.group(1)
     match = re.search(r"['\"]([^'\"]+)['\"]", prompt)
     if match:
         return match.group(1)
-    
     clean = re.sub(r"(?i)^(translate|please translate)\s+", "", prompt.strip())
     clean = re.sub(r"(?i)\s+and\s+store.*$", "", clean)
     clean = re.sub(r"(?i)\s+into\s+[a-z]+$", "", clean)
     clean = re.sub(r"(?i)\s+to\s+[a-z]+$", "", clean)
-    return clean.strip() or "Hello World"
+    return clean.strip() or prompt.strip()
 
 
 def _execute_service_step(
@@ -484,7 +491,11 @@ def create_agent_run(req: AgentRunRequest, background_tasks: BackgroundTasks, db
 
     task_id = str(uuid.uuid4())
     planner = AgentPlanner()
-    plan = planner.create_plan(req.prompt)
+    
+    if req.agent_mode == "translation":
+        plan = planner.create_translation_plan(req.prompt)
+    else:
+        plan = planner.create_plan(req.prompt)
 
     remaining_budget_eth = get_remaining_contract_budget(db)
     if req.max_budget_eth is not None and req.max_budget_eth > 0:

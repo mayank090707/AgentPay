@@ -185,6 +185,30 @@ class AgentPlanner:
             budget_status="UNCHECKED",
         )
 
+    def create_translation_plan(self, content: str) -> AgentPlan:
+        """
+        Creates a single-step translation plan into Hindi for arbitrary user content.
+        Discovers available translation providers from provider registry based on lowest quote.
+        """
+        provider_id, quote_eth, quote_reason = self.find_lowest_quote_provider("translation")
+        clean_text = (content or "").strip()
+        step = ServicePlanStep(
+            step_number=1,
+            service="translation",
+            reason=f"Translate user content into Hindi ({quote_reason})",
+            input_dependency=None,
+            provider_id=provider_id,
+            quote_eth=quote_eth,
+            status="PLANNED",
+        )
+        return AgentPlan(
+            goal=f"Translate '{clean_text}' into Hindi",
+            normalized_goal=self.normalize_goal(clean_text),
+            steps=[step],
+            total_planned_cost_eth=round(quote_eth, 6),
+            budget_status="UNCHECKED",
+        )
+
     def evaluate_budget(self, plan: AgentPlan, remaining_budget_eth: float) -> AgentPlan:
         """
         Checks plan total cost against the current remaining contract budget.

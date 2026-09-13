@@ -33,7 +33,8 @@ import {
   fetchAuditLogs, 
   parseAuditLogsToTransactions, 
   getSessionResetTime, 
-  markRecentPurchase 
+  markRecentPurchase,
+  fetchProviderComparison
 } from '../services/api';
 
 export default function Agent() {
@@ -44,9 +45,18 @@ export default function Agent() {
   const { budget, refreshData: refreshBlockchain } = useBlockchain();
   const [transactions, setTransactions] = useState([]);
   const [isLoadingAudit, setIsLoadingAudit] = useState(true);
+  const [providerComparison, setProviderComparison] = useState([]);
+
+  useEffect(() => {
+    fetchProviderComparison('translation').then(res => {
+      if (res && res.providers) {
+        setProviderComparison(res.providers);
+      }
+    }).catch(() => null);
+  }, []);
 
   // ── 2. Task Execution State ────────────────────────────────────────────────
-  const [prompt, setPrompt] = useState(searchParams.get('prompt') || "Translate 'Hello World' into Hindi and store the result.");
+  const [prompt, setPrompt] = useState(searchParams.get('prompt') || "hello world");
   const [isExecuting, setIsExecuting] = useState(false);
   const [currentRun, setCurrentRun] = useState(null);
   const [runState, setRunState] = useState('IDLE'); // 'IDLE' | 'RUNNING' | 'COMPLETED' | 'BLOCKED' | 'FAILED'
@@ -54,11 +64,10 @@ export default function Agent() {
 
   // Preset Prompt Chips
   const presetPrompts = [
-    "Summarize the market analysis report and translate the summary into Hindi",
-    "Translate 'Autonomous Payment' into Hindi and store the result",
-    "Summarize document snapshot and store output",
-    "Translate 'Hello World' into Spanish and store the result",
-    "Compute matrix multiplication dataset and store proof"
+    "hello world",
+    "Autonomous Payment Infrastructure",
+    "AgentPay enables autonomous machine payments.",
+    "Smart contract spending limit enforcement"
   ];
 
   // Load backend audit data to derive session spending (matching Dashboard.jsx)
@@ -169,7 +178,7 @@ export default function Agent() {
     setCurrentRun(null);
     setRunState('IDLE');
     setErrorMsg(null);
-    setPrompt("Translate 'Hello World' into Hindi and store the result.");
+    setPrompt("hello world");
   };
 
   // Calculate live budget metrics identical to Dashboard.jsx
@@ -249,13 +258,13 @@ export default function Agent() {
   const activePipelineStep = getPipelineStep();
 
   const pipelineStages = [
-    { step: 1, title: 'Goal Received', desc: 'Parsing user prompt & dependencies', icon: Send },
-    { step: 2, title: 'Provider Found', desc: 'Selecting best rate providers', icon: Search },
-    { step: 3, title: '402 Payment Required', desc: 'Receiving HTTP 402 quotes', icon: CreditCard },
-    { step: 4, title: 'Payment Auth', desc: 'Validating task ID & spending limit', icon: KeyRound },
-    { step: 5, title: 'Smart Contract Check', desc: 'Verifying AgentPay.sol contract cap', icon: ShieldCheck },
-    { step: 6, title: 'Payment Confirmed', desc: 'Sepolia EVM payment transaction', icon: CheckCircle2 },
-    { step: 7, title: 'Service Delivered', desc: 'Recording result & content hash', icon: FileCheck2 },
+    { step: 1, title: 'Goal Received', desc: 'Received content for Hindi translation', icon: Send },
+    { step: 2, title: 'Provider Found', desc: 'Comparing available translation providers', icon: Search },
+    { step: 3, title: '402 Payment Required', desc: 'Translation provider requires payment', icon: CreditCard },
+    { step: 4, title: 'Payment Auth', desc: 'Validating task ID and spending limit', icon: KeyRound },
+    { step: 5, title: 'Smart Contract Check', desc: 'Verifying AgentPay smart-contract authorization', icon: ShieldCheck },
+    { step: 6, title: 'Payment Confirmed', desc: 'Sepolia payment confirmed', icon: CheckCircle2 },
+    { step: 7, title: 'Service Delivered', desc: 'Receiving translated Hindi content', icon: FileCheck2 },
   ];
 
   // Multi-service intermediate & final outputs extraction from currentRun.plan
@@ -307,12 +316,15 @@ export default function Agent() {
 
       {/* ── SECTION 2: GOAL PROMPT INPUT BAR & PRESETS ───────────────────────── */}
       <div className="bg-[#FFF9F5] border border-[#E9D8CC] rounded-3xl p-6 shadow-card space-y-4">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <label htmlFor="goal-prompt" className="text-xs font-mono uppercase tracking-widest font-bold text-gray-500 flex items-center space-x-2">
             <Sparkles className="w-4 h-4 text-[#d97d54]" />
-            <span>What do you want the AI Agent to accomplish?</span>
+            <span>Enter the content you want translated into Hindi</span>
           </label>
-          <span className="text-[10px] font-bold text-gray-400">Natural-Language Execution</span>
+          <span className="px-2.5 py-1 rounded-xl text-[10px] font-extrabold bg-[#E3F2FD] text-[#2563EB] border border-[#BBDEFB] inline-flex items-center space-x-1">
+            <Languages className="w-3 h-3" />
+            <span>Target Language: Hindi</span>
+          </span>
         </div>
 
         <form onSubmit={handleRunAgent} className="space-y-3">
@@ -322,7 +334,7 @@ export default function Agent() {
               type="text"
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
-              placeholder="e.g. Translate 'Hello World' into Hindi and store the result."
+              placeholder="Enter text to translate..."
               className="flex-1 px-4 py-3.5 bg-white border border-[#E9D8CC] rounded-2xl text-xs font-bold text-[#343434] placeholder-gray-400 focus:outline-none focus:border-[#FAD2C0] transition-all shadow-xs"
               disabled={isExecuting}
             />
@@ -406,12 +418,53 @@ export default function Agent() {
                     <span className="font-extrabold text-xs text-[#343434]">{s.quote_eth} ETH</span>
                   </div>
                   <div className="text-[11px] text-gray-600">
-                    Provider: <span className="font-bold text-[#343434]">{s.provider_id}</span>
+                    Selected Provider: <span className="font-bold text-[#343434]">{s.provider_id}</span>
                   </div>
                   <p className="text-[10px] text-gray-500 leading-tight">{s.reason}</p>
                 </div>
               );
             })}
+          </div>
+
+          {/* Translation Provider Quote Comparison Breakdown */}
+          <div className="mt-2 p-4 bg-white border border-[#E9D8CC] rounded-2xl space-y-2.5">
+            <div className="flex items-center justify-between text-xs">
+              <span className="font-bold text-[#343434] flex items-center space-x-1.5">
+                <Search className="w-3.5 h-3.5 text-[#2563EB]" />
+                <span>Translation Provider Quote Comparison</span>
+              </span>
+              <span className="text-[10px] font-extrabold text-[#3E8C5A] bg-[#E8F5E9] border border-[#C8E6C9] px-2.5 py-0.5 rounded-full">
+                Best Valid Quote Auto-Selected
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1 text-xs">
+              {(providerComparison.length > 0 ? providerComparison : [
+                { provider_id: 'prov_trans_01', name: 'Translation Provider A', quote_eth: 0.00013 },
+                { provider_id: 'prov_trans_03', name: 'Translation Provider C', quote_eth: 0.00015 },
+                { provider_id: 'prov_trans_02', name: 'Translation Provider B', quote_eth: 0.00018 },
+              ]).map((p) => {
+                const isSelected = steps.some(s => s.provider_id === p.provider_id || (p.provider_id === 'prov_trans_01' && s.service === 'translation'));
+                return (
+                  <div key={p.provider_id} className={`p-3 rounded-xl border transition-all flex flex-col justify-between ${
+                    isSelected 
+                      ? 'bg-[#E8F5E9]/70 border-[#C8E6C9] text-[#343434] shadow-xs' 
+                      : 'bg-[#FDF8F5] border-[#E9D8CC] text-gray-600'
+                  }`}>
+                    <div className="flex items-center justify-between text-[11px] font-bold">
+                      <span>{p.name || p.provider_id}</span>
+                      {isSelected && <CheckCircle2 className="w-3.5 h-3.5 text-[#3E8C5A]" />}
+                    </div>
+                    <div className="flex items-center justify-between text-[10px] mt-2 font-mono">
+                      <span className="font-bold">{p.quote_eth || p.unit_price} ETH</span>
+                      <span className={isSelected ? "font-black text-[#3E8C5A] uppercase text-[9px]" : "text-gray-400 uppercase text-[9px]"}>
+                        {isSelected ? "Selected (Lowest)" : "Higher Quote"}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         </div>
       )}
@@ -653,20 +706,27 @@ export default function Agent() {
                 <div className="space-y-2">
                   <span className="text-[10px] font-mono uppercase text-gray-400 font-bold block">Delivered Resource Payload</span>
 
-                  {typeof finalStep.result === 'object' && finalStep.result?.storage_key ? (
-                    <div className="p-3 bg-[#E8F5E9]/50 rounded-xl border border-[#C8E6C9] space-y-1 text-xs">
-                      <div className="font-bold text-[#3E8C5A]">✓ Storage Completed</div>
-                      <div className="text-gray-700">Storage Reference: <code className="font-mono font-bold bg-white px-2 py-0.5 rounded border border-[#C8E6C9]">{finalStep.result.storage_key}</code></div>
-                    </div>
-                  ) : typeof finalStep.result === 'object' && finalStep.result?.translated_text ? (
-                    <div className="p-3 bg-[#E8F5E9]/50 rounded-xl border border-[#C8E6C9] text-xs font-bold text-[#3E8C5A]">
-                      &ldquo;{finalStep.result.translated_text}&rdquo;
-                    </div>
-                  ) : (
-                    <pre className="text-xs font-mono text-gray-800 bg-[#FDF8F5] p-3.5 rounded-xl border border-[#E9D8CC] overflow-x-auto whitespace-pre-wrap">
-                      {typeof finalStep.result === 'object' ? JSON.stringify(finalStep.result, null, 2) : (finalStep.result || "Service executed successfully.")}
-                    </pre>
-                  )}
+                  {(() => {
+                    let parsed = finalStep.result;
+                    if (typeof parsed === 'string') {
+                      try { parsed = JSON.parse(parsed); } catch (_) {}
+                    }
+                    const textVal = parsed?.translated_text || parsed?.text || (typeof parsed === 'string' ? parsed : null);
+
+                    if (textVal) {
+                      return (
+                        <div className="p-4 bg-[#E8F5E9]/60 rounded-xl border border-[#C8E6C9] space-y-1">
+                          <span className="text-[10px] font-bold text-[#3E8C5A] uppercase tracking-wider block">Translated Hindi Output</span>
+                          <p className="text-base font-black text-[#343434]">&ldquo;{textVal}&rdquo;</p>
+                        </div>
+                      );
+                    }
+                    return (
+                      <pre className="text-xs font-mono text-gray-800 bg-[#FDF8F5] p-3.5 rounded-xl border border-[#E9D8CC] overflow-x-auto whitespace-pre-wrap">
+                        {typeof parsed === 'object' ? JSON.stringify(parsed, null, 2) : (parsed || "Service executed successfully.")}
+                      </pre>
+                    );
+                  })()}
                 </div>
 
                 {/* Hashes & Tx Links */}

@@ -587,11 +587,26 @@ def purchase_service_endpoint(
             PROVIDER_BASE_URL=provider_base_url,
         )
 
-        from fastapi.testclient import TestClient
-        from backend.app.main import app
+        env_provider_url = (os.getenv("PROVIDER_BASE_URL") or os.getenv("PROVIDER_URL") or "").strip()
+        for path_suffix in ["/services/translation", "/services/translate", "/services/compute", "/services/storage", "/services"]:
+            if env_provider_url.rstrip("/").endswith(path_suffix):
+                env_provider_url = env_provider_url.rstrip("/")[:-len(path_suffix)].rstrip("/")
+                break
 
-        test_client = TestClient(app, base_url="http://testserver")
-        provider_client = ProviderClient(base_url="http://testserver", http_client=test_client)
+        is_external_provider = (
+            env_provider_url != "" 
+            and not env_provider_url.startswith("http://localhost") 
+            and not env_provider_url.startswith("http://127.0.0.1")
+            and not env_provider_url.startswith("http://testserver")
+        )
+
+        if is_external_provider:
+            provider_client = ProviderClient(base_url=env_provider_url)
+        else:
+            from fastapi.testclient import TestClient
+            from backend.app.main import app
+            test_client = TestClient(app, base_url="http://testserver")
+            provider_client = ProviderClient(base_url="http://testserver", http_client=test_client)
         contract_client = ContractClient(settings=client_settings)
         payment_client = PaymentClient(contract_client=contract_client)
 

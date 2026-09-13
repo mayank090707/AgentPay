@@ -288,11 +288,14 @@ class ProviderClient:
         status = response.status_code
 
         logger.info(
-            "Received Provider Response | provider=%s | url=%s | status_code=%s | request_id=%s",
-            service_request.provider,
+            "PROVIDER REQUEST:\nbase_url = %s\nendpoint = %s\nfull_url = %s\nmethod = POST\nstatus = %s\nrequest_id = %s\nprovider_id = %s\nservice_type = %s",
+            self.base_url,
+            response.url.path,
             str(response.url),
             status,
             req_id_str,
+            service_request.provider,
+            service_request.service,
         )
 
         # 1. HTTP 2xx: Successful fulfillment

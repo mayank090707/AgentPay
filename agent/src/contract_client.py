@@ -333,7 +333,7 @@ class ContractClient:
                 "from": self.agent_address,
                 "nonce": nonce,
                 "gasPrice": gas_price,
-                "gas": 65000,
+                "gas": 42000,
                 "chainId": self.chain_id,
             })
 
@@ -343,7 +343,7 @@ class ContractClient:
                 tx_data["gas"] = int(estimated_gas * 1.15)
             except Exception as est_err:
                 self._handle_revert(est_err, req_id_str)
-                tx_data["gas"] = 65000
+                tx_data["gas"] = 42000
 
         except ContractError:
             raise
@@ -522,7 +522,7 @@ class ContractClient:
                 details={"raw_error": msg},
             ) from exc
 
-        if "gas required exceeds allowance" in err_lower or "insufficient funds" in err_lower:
+        if "gas required exceeds allowance" in err_lower or "insufficient funds" in err_lower or "-32000" in err_lower or "exceeds allowance" in err_lower:
             raise PaymentAuthorizationError(
                 f"Agent wallet ({self.agent_address}) has insufficient ETH on Sepolia to cover transaction gas fees.",
                 code="INSUFFICIENT_AGENT_GAS_BALANCE",

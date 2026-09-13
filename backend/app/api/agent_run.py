@@ -369,7 +369,11 @@ def execute_agent_run_task(agent_run: AgentRun, db: Session) -> AgentRun:
             err_type = type(e).__name__
             err_msg_lower = err_msg.lower()
 
-            if "budget" in err_msg_lower or "0x028d7b37" in err_msg_lower or "hardcap" in err_msg_lower or err_type == "BudgetExceededError":
+            if "insufficient_agent_gas_balance" in err_msg_lower or "insufficient eth on sepolia" in err_msg_lower or "exceeds allowance" in err_msg_lower or getattr(e, "code", "") == "INSUFFICIENT_AGENT_GAS_BALANCE":
+                err_code = "INSUFFICIENT_AGENT_GAS_BALANCE"
+                err_msg = "Agent wallet has insufficient ETH on Sepolia to cover transaction gas fees. Please top up the agent wallet."
+                run_status = AgentRunStatus.FAILED
+            elif "budget" in err_msg_lower or "0x028d7b37" in err_msg_lower or "hardcap" in err_msg_lower or err_type == "BudgetExceededError":
                 err_code = "BUDGET_EXCEEDED"
                 run_status = AgentRunStatus.BLOCKED
             elif "revert" in err_msg_lower or "contract" in err_msg_lower or err_type in ["ContractError", "ContractLogicError"]:

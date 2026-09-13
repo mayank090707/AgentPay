@@ -13,7 +13,6 @@ import {
 } from 'lucide-react';
 import { useBlockchain } from '../context/BlockchainContext';
 import { fetchAuditLogs, parseAuditLogsToTransactions } from '../services/api';
-import { mockTransactions, mockContractSummary } from '../data/mockData';
 import StatusBadge from '../components/common/StatusBadge';
 import TransactionModal from '../components/common/TransactionModal';
 
@@ -37,17 +36,17 @@ export default function Payments() {
     setErrorMessage(null);
     try {
       const res = await fetchAuditLogs({ limit: 200 });
-      if (res && Array.isArray(res.logs) && res.logs.length > 0) {
+      if (res && Array.isArray(res.logs)) {
         const parsed = parseAuditLogsToTransactions(res.logs);
         setTransactions(parsed);
         setIsBackendLive(true);
       } else {
-        setTransactions(mockTransactions);
+        setTransactions([]);
         setIsBackendLive(false);
       }
     } catch (err) {
-      console.warn('[Payments] Backend fetch failed, using fallback data:', err);
-      setTransactions(mockTransactions);
+      console.warn('[Payments] Backend fetch failed:', err);
+      setTransactions([]);
       setIsBackendLive(false);
       setErrorMessage(err.message || 'Could not connect to FastAPI backend on port 8000');
     } finally {
@@ -65,7 +64,7 @@ export default function Payments() {
   const blockedCount = transactions.filter(t => t.delivery_status === 'Blocked').length;
   const totalSpentFormatted = budget 
     ? `${budget.totalSpentEth} ETH` 
-    : `₹${mockContractSummary.totalSpent}.00`;
+    : `0.00 ETH`;
 
   // Filtered & Sorted Transactions
   const filteredTransactions = useMemo(() => {
@@ -109,7 +108,7 @@ export default function Payments() {
               </span>
             ) : (
               <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-[#FFF3E0] text-[#E65100] border border-[#FFE0B2]">
-                <span>⚡ Demo Fallback Data</span>
+                <span>⚡ Backend Offline</span>
               </span>
             )}
           </div>

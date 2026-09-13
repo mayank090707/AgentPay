@@ -112,6 +112,22 @@ export async function fetchReceipt(requestId) {
 }
 
 /**
+ * Initiates real service purchase flow via backend & Sepolia smart contract (/services/purchase).
+ * @param {object} purchaseData
+ * @param {string} purchaseData.service_type - 'translation' | 'compute' | 'storage'
+ * @param {string} [purchaseData.provider_id]
+ * @param {object} [purchaseData.payload]
+ * @param {string} [purchaseData.request_id]
+ * @returns {Promise<object>}
+ */
+export async function purchaseService(purchaseData) {
+  return await apiFetch('/services/purchase', {
+    method: 'POST',
+    body: JSON.stringify(purchaseData),
+  });
+}
+
+/**
  * Parses raw audit log entries from FastAPI into UI transaction objects.
  * Groups logs by request_id and builds a complete lifecycle record.
  * 

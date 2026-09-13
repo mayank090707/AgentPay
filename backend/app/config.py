@@ -25,7 +25,7 @@ class Settings(BaseSettings):
     # Blockchain configuration for on-chain verification
     RPC_URL: Optional[str] = None
     CONTRACT_ADDRESS: Optional[str] = None
-    PAYMENT_VERIFIER_TYPE: str = "mock"
+    PAYMENT_VERIFIER_TYPE: str = "on_chain"
 
     @field_validator("PROVIDER_WALLET_ADDRESS")
     @classmethod

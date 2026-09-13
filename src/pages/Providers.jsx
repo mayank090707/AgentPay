@@ -23,7 +23,7 @@ import {
   KeyRound,
   Bot
 } from 'lucide-react';
-import { fetchProviders } from '../services/api';
+import { fetchProviders, purchaseService } from '../services/api';
 import { mockProviders } from '../data/mockData';
 
 export default function Providers() {
@@ -163,14 +163,13 @@ export default function Providers() {
   const handleBuyService = async (provider) => {
     const serviceType = (provider.service || 'translation').toLowerCase();
     const providerId = provider.provider_id || (provider.name?.toLowerCase().includes('beta') ? 'beta' : 'alpha');
-    const reqId = '0x' + Array.from({ length: 32 }, () => Math.floor(Math.random() * 256).toString(16).padStart(2, '0')).join('');
 
     setPurchaseModal({
       isOpen: true,
       provider,
       step: 1,
       status: 'running',
-      requestId: reqId,
+      requestId: null,
       quote: null,
       paymentTx: null,
       contentHash: null,
@@ -179,9 +178,6 @@ export default function Providers() {
     });
 
     try {
-      // Step 1: Initial Provider Contact
-      await new Promise(r => setTimeout(r, 600));
-
       let payload = { provider_id: providerId };
       if (serviceType === 'translation') {
         payload = { text: "Autonomous Agent AI Service Request", source_lang: "en", target_lang: "es", provider_id: providerId };
@@ -191,108 +187,38 @@ export default function Providers() {
         payload = { key: "dataset_snapshot", value: "Decentralized AI model weights proof", provider_id: providerId };
       }
 
-      const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
-      
-      let response = null;
-      let quoteData = null;
+      setPurchaseModal(prev => ({ ...prev, step: 2 }));
 
-      try {
-        response = await fetch(`${API_BASE_URL}/services/${serviceType}`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-Request-ID': reqId,
-          },
-          body: JSON.stringify(payload),
-        });
+      // Call real backend purchase endpoint (/services/purchase) which runs Orchestrator & Sepolia Smart Contract
+      const res = await purchaseService({
+        service_type: serviceType,
+        provider_id: providerId,
+        payload,
+      });
 
-        if (response.status === 402) {
-          quoteData = await response.json();
-          const quoteId = response.headers.get('X-Payment-Quote-Id') || quoteData.quote_id;
-          const amount = parseFloat(response.headers.get('X-Payment-Amount') || quoteData.amount || provider.price);
-          const address = response.headers.get('X-Payment-Address') || quoteData.pay_to_address || '0xA1B2C3D4E5F6A7B8C9D0E1F2A3B4C5D6E7F8A9B0';
-
-          setPurchaseModal(prev => ({
-            ...prev,
-            step: 2,
-            quote: { quoteId, amount, address },
-          }));
-        }
-      } catch (e) {
-        console.warn('Backend fetch fallback to simulated agent orchestration:', e);
+      if (res && res.status === 'success') {
         setPurchaseModal(prev => ({
           ...prev,
-          step: 2,
-          quote: { quoteId: `q_${Date.now()}`, amount: provider.price, address: '0x220bef9d0BF075F2ea2a013Fc04Fd6575EB999B6' },
+          step: 4,
+          requestId: res.request_id,
+          paymentTx: res.transaction_hash,
+          contentHash: res.content_hash,
+          receipt: res.receipt,
+          quote: {
+            quoteId: res.receipt?.quote_id || 'quote_sepolia',
+            amount: res.amount,
+            address: provider.endpoint || 'AgentPay Smart Contract',
+          },
         }));
+
+        await new Promise(r => setTimeout(r, 400));
+        setPurchaseModal(prev => ({ ...prev, step: 6 }));
+
+        await new Promise(r => setTimeout(r, 400));
+        setPurchaseModal(prev => ({ ...prev, step: 7, status: 'completed' }));
+      } else {
+        throw new Error(res?.detail || res?.message || 'Purchase execution failed');
       }
-
-      // Step 3: Embedded AI Agent Smart Contract Pre-flight check
-      await new Promise(r => setTimeout(r, 700));
-      setPurchaseModal(prev => ({ ...prev, step: 3 }));
-
-      // Step 4: Smart Contract Authorization & Sepolia Payment
-      await new Promise(r => setTimeout(r, 800));
-      const simulatedTxHash = '0x' + Array.from({ length: 32 }, () => Math.floor(Math.random() * 256).toString(16).padStart(2, '0')).join('');
-      setPurchaseModal(prev => ({
-        ...prev,
-        step: 4,
-        paymentTx: simulatedTxHash,
-      }));
-
-      // Step 5: Submit X-Payment-Proof to Backend
-      await new Promise(r => setTimeout(r, 600));
-      setPurchaseModal(prev => ({ ...prev, step: 5 }));
-
-      let contentHash = '0x' + Array.from({ length: 32 }, () => Math.floor(Math.random() * 256).toString(16).padStart(2, '0')).join('');
-      let finalReceipt = null;
-
-      if (quoteData && response && response.status === 402) {
-        try {
-          const proofObj = {
-            quote_id: quoteData.quote_id || response.headers.get('X-Payment-Quote-Id'),
-            tx_hash: simulatedTxHash,
-            payer_address: "0x3A8F91B2C4D5E6F7A8B9C0D1E2F3A4B5C6D7E8F9",
-          };
-          const res2 = await fetch(`${API_BASE_URL}/services/${serviceType}`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'X-Request-ID': reqId,
-              'X-Payment-Proof': JSON.stringify(proofObj),
-            },
-            body: JSON.stringify(payload),
-          });
-
-          if (res2.ok) {
-            const res2Data = await res2.json();
-            if (res2Data.receipt) {
-              contentHash = res2Data.receipt.content_hash || contentHash;
-              finalReceipt = res2Data.receipt;
-            }
-          }
-        } catch (err2) {
-          console.warn('Payment proof submission fallback:', err2);
-        }
-      }
-
-      // Step 6: Service Payload & Delivery Proof Delivered
-      await new Promise(r => setTimeout(r, 600));
-      setPurchaseModal(prev => ({
-        ...prev,
-        step: 6,
-        contentHash,
-        receipt: finalReceipt,
-      }));
-
-      // Step 7: Completed & Recorded in Audit Log
-      await new Promise(r => setTimeout(r, 600));
-      setPurchaseModal(prev => ({
-        ...prev,
-        step: 7,
-        status: 'completed',
-      }));
-
     } catch (err) {
       setPurchaseModal(prev => ({
         ...prev,

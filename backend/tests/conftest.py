@@ -38,7 +38,12 @@ def client(db_session):
         finally:
             pass
 
+    from backend.app.config import settings
+    original_verifier = settings.PAYMENT_VERIFIER_TYPE
+    settings.PAYMENT_VERIFIER_TYPE = "mock"
+
     app.dependency_overrides[get_db] = override_get_db
     with TestClient(app) as test_client:
         yield test_client
     app.dependency_overrides.clear()
+    settings.PAYMENT_VERIFIER_TYPE = original_verifier

@@ -1,7 +1,11 @@
 import json
 import uuid
+import os
+import time
 from datetime import datetime, timedelta
 from typing import Optional
+from pydantic import BaseModel, SecretStr
+from eth_utils import keccak
 
 from fastapi import APIRouter, Depends, Header, HTTPException, status
 from fastapi.responses import JSONResponse
@@ -363,7 +367,7 @@ def handle_service_execution(
             verify_req = PaymentVerifyRequest(
                 quote_id=proof.quote_id,
                 tx_hash=proof.tx_hash,
-                payer_address=proof.payer_address or "0xClientPayerAddress"
+                payer_address=proof.payer_address or settings.PROVIDER_WALLET_ADDRESS
             )
             payment, quote = payment_verifier.verify_payment(db, verify_req)
         except PaymentVerificationError as e:
@@ -497,4 +501,155 @@ def service_storage(
     Simulated Cloud / IPFS Storage endpoint with HTTP 402 payment flow.
     """
     return handle_service_execution("storage", request.model_dump(), x_payment_proof, db, provider_id=request.provider_id, x_request_id=x_request_id)
+
+
+class ServicePurchaseRequest(BaseModel):
+    service_type: str
+    provider_id: Optional[str] = None
+    payload: Optional[dict] = None
+    request_id: Optional[str] = None
+
+
+@router.post("/purchase")
+def purchase_service_endpoint(
+    request: ServicePurchaseRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Executes a real purchase flow via Agent Orchestrator and Smart Contract on Sepolia.
+    """
+    service_type = request.service_type.lower()
+    if service_type not in ("translation", "compute", "storage"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid service type '{request.service_type}'. Must be one of: translation, compute, storage."
+        )
+
+    provider_id = request.provider_id or "alpha"
+
+    # Construct request payload if not provided
+    payload = request.payload or {}
+    if not payload:
+        if service_type == "translation":
+            payload = {"text": "Autonomous Agent AI Service Request", "source_lang": "en", "target_lang": "es", "provider_id": provider_id}
+        elif service_type == "compute":
+            payload = {"operation": "matrix_multiply", "params": {"matrix_size": 100}, "provider_id": provider_id}
+        elif service_type == "storage":
+            payload = {"key": "dataset_snapshot", "value": "Decentralized AI model weights proof", "provider_id": provider_id}
+
+    if "provider_id" not in payload and provider_id:
+        payload["provider_id"] = provider_id
+
+    # Resolve Request ID (32-byte hex, 66 characters starting with 0x)
+    if request.request_id and request.request_id.startswith("0x") and len(request.request_id) == 66:
+        req_id_str = request.request_id
+    else:
+        req_id_str = "0x" + keccak(text=f"req_{time.time()}_{uuid.uuid4()}").hex()
+
+    from agent.src.orchestrator import Orchestrator
+    from agent.src.provider_client import ProviderClient
+    from agent.src.contract_client import ContractClient
+    from agent.src.payment_client import PaymentClient
+    from agent.src.models import ServiceRequest, RequestId
+    from agent.src.config import Settings as AgentSettings, get_settings as get_agent_settings
+    from agent.src.exceptions import BudgetExceededError, PaymentError, DeliveryError, ConfigurationError
+
+    rpc_url = os.getenv("RPC_URL") or os.getenv("SEPOLIA_RPC_URL") or settings.RPC_URL
+    contract_addr = os.getenv("CONTRACT_ADDRESS") or os.getenv("VITE_CONTRACT_ADDRESS") or settings.CONTRACT_ADDRESS
+    agent_addr = os.getenv("AGENT_ADDRESS")
+    agent_pk = os.getenv("AGENT_PRIVATE_KEY")
+    provider_base_url = os.getenv("PROVIDER_BASE_URL") or "http://localhost:8000"
+
+    # Check required environment configuration
+    missing_vars = []
+    if not rpc_url: missing_vars.append("RPC_URL (or SEPOLIA_RPC_URL)")
+    if not contract_addr: missing_vars.append("CONTRACT_ADDRESS (or VITE_CONTRACT_ADDRESS)")
+    if not agent_addr: missing_vars.append("AGENT_ADDRESS")
+    if not agent_pk: missing_vars.append("AGENT_PRIVATE_KEY")
+
+    if missing_vars:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Real on-chain payment execution requires missing environment variables: {', '.join(missing_vars)}. Configure these in your .env file."
+        )
+
+    try:
+        client_settings = AgentSettings(
+            RPC_URL=rpc_url,
+            CONTRACT_ADDRESS=contract_addr,
+            CHAIN_ID=int(os.getenv("CHAIN_ID") or os.getenv("VITE_CHAIN_ID") or 11155111),
+            AGENT_ADDRESS=agent_addr,
+            AGENT_PRIVATE_KEY=SecretStr(agent_pk),
+            PROVIDER_BASE_URL=provider_base_url,
+        )
+
+        from fastapi.testclient import TestClient
+        from backend.app.main import app
+
+        test_client = TestClient(app, base_url="http://testserver")
+        provider_client = ProviderClient(base_url="http://testserver", http_client=test_client)
+        contract_client = ContractClient(settings=client_settings)
+        payment_client = PaymentClient(contract_client=contract_client)
+
+        orchestrator = Orchestrator(
+            provider_client=provider_client,
+            contract_client=contract_client,
+            payment_client=payment_client,
+            payer_address=agent_addr,
+        )
+
+        service_req = ServiceRequest(
+            request_id=RequestId(req_id_str),
+            service=service_type,
+            payload=payload,
+            provider=provider_id,
+        )
+
+        result = orchestrator.run(service_req, endpoint_path=f"/services/{service_type}")
+
+        return {
+            "status": "success",
+            "request_id": str(result.request_id),
+            "service": service_type,
+            "provider": provider_id,
+            "amount": float(result.amount),
+            "transaction_hash": result.payment_reference,
+            "payment_status": "CONFIRMED",
+            "delivery_status": "FULFILLED",
+            "content_hash": result.content_hash,
+            "receipt": {
+                "request_id": str(result.request_id),
+                "provider": result.provider,
+                "amount": float(result.amount),
+                "currency": result.currency,
+                "tx_hash": result.payment_reference,
+                "content_hash": result.content_hash,
+            }
+        }
+    except BudgetExceededError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Smart contract payment rejected: Budget exceeded. {str(e)}"
+        )
+    except PaymentError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Blockchain payment failed: {str(e)}"
+        )
+    except DeliveryError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Service delivery failed after payment: {str(e)}"
+        )
+    except ConfigurationError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Agent configuration error: {str(e)}"
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Purchase execution failed: {str(e)}"
+        )
+
 

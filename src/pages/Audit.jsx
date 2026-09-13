@@ -19,7 +19,6 @@ import {
   FileCode
 } from 'lucide-react';
 import { fetchAuditLogs, fetchAuditVerification, parseAuditLogsToTransactions } from '../services/api';
-import { mockTransactions, mockContractSummary } from '../data/mockData';
 import StatusBadge from '../components/common/StatusBadge';
 
 export default function Audit() {
@@ -42,20 +41,20 @@ export default function Audit() {
         const res = await fetchAuditLogs({ limit: 200 });
         if (!isMounted) return;
 
-        if (res && Array.isArray(res.logs) && res.logs.length > 0) {
+        if (res && Array.isArray(res.logs)) {
           const parsed = parseAuditLogsToTransactions(res.logs);
           setTransactions(parsed);
           setSelectedRequestId(parsed[0]?.request_id || null);
           setIsBackendLive(true);
         } else {
-          setTransactions(mockTransactions);
-          setSelectedRequestId(mockTransactions[0].request_id);
+          setTransactions([]);
+          setSelectedRequestId(null);
           setIsBackendLive(false);
         }
       } catch (err) {
         if (isMounted) {
-          setTransactions(mockTransactions);
-          setSelectedRequestId(mockTransactions[0].request_id);
+          setTransactions([]);
+          setSelectedRequestId(null);
           setIsBackendLive(false);
         }
       } finally {
@@ -115,7 +114,7 @@ export default function Audit() {
 
   // Selected Transaction Object
   const selectedTx = useMemo(() => {
-    return transactions.find(t => t.request_id === selectedRequestId) || transactions[0] || mockTransactions[0];
+    return transactions.find(t => t.request_id === selectedRequestId) || transactions[0] || null;
   }, [transactions, selectedRequestId]);
 
   const isBlocked = selectedTx?.delivery_status === 'Blocked';
@@ -145,7 +144,7 @@ export default function Audit() {
               </span>
             ) : (
               <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-[#FFF3E0] text-[#E65100] border border-[#FFE0B2]">
-                <span>⚡ Demo Fallback Logs</span>
+                <span>⚡ Backend Offline</span>
               </span>
             )}
           </div>
@@ -286,11 +285,18 @@ export default function Audit() {
                 </div>
               );
             })}
+
+            {filteredTransactions.length === 0 && (
+              <div className="py-8 text-center text-gray-400 space-y-2">
+                <FileCheck2 className="w-8 h-8 mx-auto text-gray-300" />
+                <p className="text-xs font-semibold">No audit logs found.</p>
+              </div>
+            )}
           </div>
         </div>
 
         {/* RIGHT COLUMN: Audit Timeline & Delivery Proof (7 Cols) */}
-        {selectedTx && (
+        {selectedTx ? (
           <div className="lg:col-span-7 space-y-6">
             
             {/* 4. VISUAL AUDIT TIMELINE */}
@@ -537,6 +543,12 @@ export default function Audit() {
                 * Note: Cryptographically calculated content hash provides proof of service delivery on Sepolia contract <code className="font-mono">0x220b...99B6</code>.
               </p>
             </div>
+          </div>
+        ) : (
+          <div className="lg:col-span-7 bg-[#FFF9F5] border border-[#E9D8CC] rounded-3xl p-8 text-center shadow-card space-y-3 flex flex-col items-center justify-center min-h-[300px]">
+            <FileCheck2 className="w-12 h-12 text-gray-300" />
+            <h3 className="text-sm font-bold text-[#343434]">No Transaction Selected</h3>
+            <p className="text-xs text-gray-500 max-w-sm">No audit transactions are available to display verification logs.</p>
           </div>
         )}
       </div>

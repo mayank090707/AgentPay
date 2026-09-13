@@ -18,10 +18,11 @@ _SERVICE_UNITS = {
     "translation": "100 chars",
     "compute": "compute unit",
     "storage": "MB",
+    "summarization": "100 words",
 }
 
 # Supported service types for comparison
-_SUPPORTED_SERVICES = {"translation", "compute", "storage"}
+_SUPPORTED_SERVICES = {"translation", "compute", "storage", "summarization"}
 
 
 def _calculate_provider_price(
@@ -37,6 +38,12 @@ def _calculate_provider_price(
         text = payload.get("text", "")
         char_count = len(text)
         units = max(1, (char_count + 99) // 100)
+        return round(units * price_per_unit, 6)
+
+    elif service_type == "summarization":
+        text = payload.get("text", "")
+        word_count = len(text.split())
+        units = max(1, (word_count + 99) // 100)
         return round(units * price_per_unit, 6)
 
     elif service_type == "compute":
@@ -70,6 +77,11 @@ def _build_provider_schema(provider) -> ProviderInfo:
             service_type="translation",
             price_per_unit=provider.pricing.translation,
             unit=_SERVICE_UNITS["translation"],
+        ),
+        "summarization": ProviderServicePricing(
+            service_type="summarization",
+            price_per_unit=getattr(provider.pricing, "summarization", 0.00010),
+            unit=_SERVICE_UNITS["summarization"],
         ),
         "compute": ProviderServicePricing(
             service_type="compute",

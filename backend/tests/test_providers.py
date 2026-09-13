@@ -13,12 +13,11 @@ def test_list_providers(client):
     response = client.get("/providers")
     assert response.status_code == 200
     data = response.json()
-    assert data["total"] == 2
+    assert data["total"] == 8
     provider_ids = [p["provider_id"] for p in data["providers"]]
     assert "alpha" in provider_ids
     assert "beta" in provider_ids
 
-    # Verify provider details
     # Verify provider details
     alpha = next(p for p in data["providers"] if p["provider_id"] == "alpha")
     assert alpha["name"] == "Alpha AI"
@@ -41,9 +40,9 @@ def test_compare_providers_translation(client):
     assert response.status_code == 200
     data = response.json()
     assert data["service_type"] == "translation"
-    assert len(data["providers"]) == 2
+    assert len(data["providers"]) == 8
 
-    # Beta should be first (cheaper)
+    # Beta should be first (cheaper), Alpha second
     assert data["providers"][0]["provider_id"] == "beta"
     assert data["providers"][0]["calculated_price"] == 0.00005
     assert data["providers"][1]["provider_id"] == "alpha"
@@ -53,18 +52,17 @@ def test_compare_providers_translation(client):
 def test_compare_providers_storage(client):
     """
     GET /providers/compare/storage:
-    Beta (0.00008/MB) is cheaper than Alpha (0.00012/MB).
+    Storage providers are sorted cheapest first.
     """
     response = client.get("/providers/compare/storage?value=some_test_data_to_store")
     assert response.status_code == 200
     data = response.json()
     assert data["service_type"] == "storage"
-    assert len(data["providers"]) == 2
+    assert len(data["providers"]) == 8
 
-    # Beta should be first (cheaper for storage)
-    assert data["providers"][0]["provider_id"] == "beta"
-    assert data["providers"][1]["provider_id"] == "alpha"
-    assert data["providers"][0]["calculated_price"] <= data["providers"][1]["calculated_price"]
+    # Verify cheapest prices come first
+    prices = [p["calculated_price"] for p in data["providers"]]
+    assert prices == sorted(prices)
 
 
 def test_compare_providers_unsupported_service(client):

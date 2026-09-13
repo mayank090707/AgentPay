@@ -4,53 +4,11 @@ Backend tests for POST /agent/run endpoint, DB task tracking, and pre-execution 
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import StaticPool
 
-from backend.app.main import app
-from backend.app.database import Base, get_db
 import backend.app.models  # noqa: F401
 from backend.app.models.agent_run import AgentRun, AgentRunStep, AgentRunStatus, AgentRunStepStatus
-import backend.app.api.agent_run as agent_run_module
 
-# In-memory SQLite for testing with StaticPool
-SQLALCHEMY_TEST_DATABASE_URL = "sqlite:///:memory:"
-
-engine = create_engine(
-    SQLALCHEMY_TEST_DATABASE_URL,
-    connect_args={"check_same_thread": False},
-    poolclass=StaticPool
-)
-TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-
-
-@pytest.fixture(autouse=True)
-def setup_db():
-    Base.metadata.create_all(bind=engine)
-    yield
-    Base.metadata.drop_all(bind=engine)
-
-
-@pytest.fixture
-def client():
-    """Provide a TestClient with the in-memory DB override set and torn down per-test."""
-    def override_get_db():
-        db = TestingSessionLocal()
-        try:
-            yield db
-        finally:
-            db.close()
-
-    # Patch both the request-scoped dependency and the background-task SessionLocal
-    app.dependency_overrides[get_db] = override_get_db
-    original_session_local = agent_run_module.SessionLocal
-    agent_run_module.SessionLocal = TestingSessionLocal
-    try:
-        yield TestClient(app)
-    finally:
-        app.dependency_overrides.pop(get_db, None)
-        agent_run_module.SessionLocal = original_session_local
+# Uses standard db_session and client fixtures from conftest.py
 
 
 # 1. Valid translation goal
@@ -118,44 +76,38 @@ def test_unsupported_goal(client: TestClient):
 
 
 # 6. AgentRun is persisted in DB
-def test_agent_run_persisted(client: TestClient):
+def test_agent_run_persisted(client: TestClient, db_session):
     response = client.post("/agent/run", json={"prompt": "Translate this text", "auto_execute": False})
     data = response.json()
     task_id = data["task_id"]
 
-    db = TestingSessionLocal()
-    run_record = db.query(AgentRun).filter(AgentRun.task_id == task_id).first()
+    run_record = db_session.query(AgentRun).filter(AgentRun.task_id == task_id).first()
     assert run_record is not None
     assert run_record.user_prompt == "Translate this text"
     assert run_record.status == AgentRunStatus.PLANNED
-    db.close()
 
 
 # 7. AgentRunStep records are persisted in DB
-def test_agent_run_steps_persisted(client: TestClient):
+def test_agent_run_steps_persisted(client: TestClient, db_session):
     response = client.post("/agent/run", json={"prompt": "Translate text and store it", "auto_execute": False})
     data = response.json()
     task_id = data["task_id"]
 
-    db = TestingSessionLocal()
-    step_records = db.query(AgentRunStep).filter(AgentRunStep.task_id == task_id).all()
+    step_records = db_session.query(AgentRunStep).filter(AgentRunStep.task_id == task_id).all()
     assert len(step_records) == 2
     assert step_records[0].service == "translation"
     assert step_records[1].service == "storage"
-    db.close()
 
 
 # 8. Total planned cost is persisted correctly
-def test_total_planned_cost_persisted(client: TestClient):
+def test_total_planned_cost_persisted(client: TestClient, db_session):
     response = client.post("/agent/run", json={"prompt": "Translate this text and store it", "auto_execute": False})
     data = response.json()
     task_id = data["task_id"]
 
-    db = TestingSessionLocal()
-    run_record = db.query(AgentRun).filter(AgentRun.task_id == task_id).first()
+    run_record = db_session.query(AgentRun).filter(AgentRun.task_id == task_id).first()
     assert run_record.total_planned_cost_eth > 0
     assert round(run_record.total_planned_cost_eth, 6) == round(data["total_planned_cost_eth"], 6)
-    db.close()
 
 
 # 9. Within-budget plan returns PLANNED
@@ -183,7 +135,7 @@ def test_budget_exceeded_plan(client: TestClient):
 
 
 # 11. Budget-exceeded plan sends NO blockchain transaction
-def test_budget_exceeded_sends_no_blockchain_tx(client: TestClient):
+def test_budget_exceeded_sends_no_blockchain_tx(client: TestClient, db_session):
     response = client.post("/agent/run", json={
         "prompt": "Translate this text and store it",
         "max_budget_eth": 0.000001
@@ -194,11 +146,9 @@ def test_budget_exceeded_sends_no_blockchain_tx(client: TestClient):
     for step in data["plan"]:
         assert step.get("transaction_hash") is None
 
-    db = TestingSessionLocal()
-    run_record = db.query(AgentRun).filter(AgentRun.task_id == data["task_id"]).first()
+    run_record = db_session.query(AgentRun).filter(AgentRun.task_id == data["task_id"]).first()
     assert run_record.status == AgentRunStatus.BLOCKED
     assert run_record.error_code == "BUDGET_EXCEEDED"
-    db.close()
 
 
 # 12. Existing routes remain unaffected

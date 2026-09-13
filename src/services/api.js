@@ -364,3 +364,24 @@ export async function runDoublePaymentDemo() {
 export async function fetchSecuritySummary() {
   return await apiFetch('/security-demo/summary');
 }
+
+/**
+ * Fetches live kill switch status from backend.
+ * @returns {Promise<object>}
+ */
+export async function fetchKillSwitchStatus() {
+  return await apiFetch('/security-demo/kill-switch');
+}
+
+/**
+ * Toggles emergency kill switch state on backend.
+ * @param {boolean} active
+ * @param {string} [reason]
+ * @returns {Promise<object>}
+ */
+export async function toggleKillSwitch(active, reason) {
+  return await apiFetch('/security-demo/kill-switch', {
+    method: 'POST',
+    body: JSON.stringify({ active, reason: reason || 'Emergency pause triggered by administrator' }),
+  });
+}

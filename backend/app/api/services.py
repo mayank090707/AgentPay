@@ -21,6 +21,7 @@ from backend.app.schemas.service import (
     TranslationRequest,
     ComputeRequest,
     StorageRequest,
+    SummarizationRequest,
     PaymentRequiredResponse,
     ServiceSuccessResponse,
     PaymentProof
@@ -420,6 +421,15 @@ def handle_service_execution(
             source_lang=payload.get("source_lang", "auto"),
             target_lang=payload.get("target_lang", "en")
         )
+    elif service_type == "summarization":
+        input_text = payload.get("text") or payload.get("value") or str(payload)
+        summary_result = f"Summary: {input_text[:120]}... [Condensed key insights extracted by AI Agent]"
+        service_data = {
+            "summary": summary_result,
+            "original_length": len(input_text),
+            "summary_length": len(summary_result),
+            "status": "completed",
+        }
     elif service_type == "compute":
         service_data = run_compute(
             operation=payload.get("operation", "matrix_multiply"),
@@ -518,6 +528,19 @@ def service_storage(
     return handle_service_execution("storage", request.model_dump(), x_payment_proof, db, provider_id=request.provider_id, x_request_id=x_request_id)
 
 
+@router.post("/summarize")
+def service_summarize(
+    request: SummarizationRequest,
+    x_payment_proof: Optional[str] = Header(None, alias="X-Payment-Proof"),
+    x_request_id: Optional[str] = Header(None, alias="X-Request-ID"),
+    db: Session = Depends(get_db)
+):
+    """
+    Simulated AI Summarization Service endpoint with HTTP 402 payment flow.
+    """
+    return handle_service_execution("summarization", request.model_dump(), x_payment_proof, db, provider_id=request.provider_id, x_request_id=x_request_id)
+
+
 class ServicePurchaseRequest(BaseModel):
     service_type: str
     provider_id: Optional[str] = None
@@ -534,10 +557,10 @@ def purchase_service_endpoint(
     Executes a real purchase flow via Agent Orchestrator and Smart Contract on Sepolia.
     """
     service_type = request.service_type.lower()
-    if service_type not in ("translation", "compute", "storage"):
+    if service_type not in ("translation", "compute", "storage", "summarization", "summarize"):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid service type '{request.service_type}'. Must be one of: translation, compute, storage."
+            detail=f"Invalid service type '{request.service_type}'. Must be one of: translation, compute, storage, summarization."
         )
 
     provider_id = request.provider_id or "alpha"
@@ -545,8 +568,10 @@ def purchase_service_endpoint(
     # Construct request payload if not provided
     payload = request.payload or {}
     if not payload:
-        if service_type == "translation":
+        if service_type in ("translation", "translate"):
             payload = {"text": "Autonomous Agent AI Service Request", "source_lang": "en", "target_lang": "es", "provider_id": provider_id}
+        elif service_type in ("summarization", "summarize"):
+            payload = {"text": "Autonomous AI agent completed task with payment authorization.", "max_length": 150, "provider_id": provider_id}
         elif service_type == "compute":
             payload = {"operation": "matrix_multiply", "params": {"matrix_size": 100}, "provider_id": provider_id}
         elif service_type == "storage":

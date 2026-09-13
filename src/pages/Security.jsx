@@ -27,6 +27,8 @@ import {
   runBudgetExceededDemo,
   runDoublePaymentDemo,
   fetchSecuritySummary,
+  fetchKillSwitchStatus,
+  toggleKillSwitch,
   purchaseService
 } from '../services/api';
 import { 
@@ -54,6 +56,8 @@ export default function Security() {
   const [loadingMessage, setLoadingMessage] = useState('');
   const [activeNotice, setActiveNotice] = useState(null);
   const [activeError, setActiveError] = useState(null);
+  const [killSwitchActive, setKillSwitchActive] = useState(false);
+  const [killSwitchLoading, setKillSwitchLoading] = useState(false);
 
   // Dynamic Live Demo Card States
   const [budgetExceededDemo, setBudgetExceededDemo] = useState({
@@ -82,7 +86,7 @@ export default function Security() {
     detail: 'Payment authorized within budget cap. On-chain state updated and ETH transferred to provider.'
   });
 
-  // Fetch live summary and audit trail
+  // Fetch live summary, kill switch state, and audit trail
   const loadLiveSecurityData = async () => {
     try {
       // 1. Summary Metrics
@@ -96,9 +100,18 @@ export default function Security() {
           duplicatePreventionCount: sumRes.duplicate_prevention_count,
           contractAddress: sumRes.contract_address || '0x220b3C0C30A90F8e34f711c14041b369D3c599B6'
         });
+        if (typeof sumRes.kill_switch_active === 'boolean') {
+          setKillSwitchActive(sumRes.kill_switch_active);
+        }
       }
 
-      // 2. Audit Logs
+      // 2. Kill Switch Direct Read
+      const ksRes = await fetchKillSwitchStatus();
+      if (ksRes) {
+        setKillSwitchActive(ksRes.active);
+      }
+
+      // 3. Audit Logs
       const auditRes = await fetchAuditLogs({ limit: 50 });
       if (auditRes && Array.isArray(auditRes.logs)) {
         setIsBackendLive(true);
@@ -232,6 +245,28 @@ export default function Security() {
     }
   };
 
+  const handleToggleKillSwitch = async () => {
+    setKillSwitchLoading(true);
+    try {
+      const nextState = !killSwitchActive;
+      const res = await toggleKillSwitch(
+        nextState,
+        nextState ? "Emergency pause enabled via Security Dashboard" : "Emergency pause disabled via Security Dashboard"
+      );
+      setKillSwitchActive(res.active);
+      setActiveNotice(
+        res.active
+          ? "🚨 EMERGENCY KILL SWITCH ACTIVATED — All autonomous agent runs will be BLOCKED immediately!"
+          : "✅ EMERGENCY KILL SWITCH DEACTIVATED — Agent execution restored to normal operation."
+      );
+      await loadLiveSecurityData();
+    } catch (err) {
+      setActiveError(`Kill Switch error: ${err.message}`);
+    } finally {
+      setKillSwitchLoading(false);
+    }
+  };
+
   const handleResetDemo = () => {
     setActiveNotice('Security display refreshed with live on-chain and audit database state.');
     setActiveError(null);
@@ -275,6 +310,47 @@ export default function Security() {
             </p>
           </div>
         </div>
+      </div>
+
+      {/* Persistent Emergency Kill Switch Controller Banner */}
+      <div className={`border rounded-3xl p-5 shadow-card transition-all flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 ${
+        killSwitchActive 
+          ? 'bg-[#FFF0F0] border-[#FFCDD2] text-[#C94C4C]' 
+          : 'bg-[#FFF9F5] border-[#E9D8CC] text-[#343434]'
+      }`}>
+        <div className="flex items-center space-x-3">
+          <div className={`p-3 rounded-2xl ${killSwitchActive ? 'bg-[#FFEBEE] text-[#C94C4C]' : 'bg-[#FFF3E0] text-[#E65100]'}`}>
+            <ShieldAlert className="w-6 h-6 animate-pulse" />
+          </div>
+          <div>
+            <div className="flex items-center space-x-2">
+              <h3 className="font-black text-sm">Emergency System Kill Switch</h3>
+              <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+                killSwitchActive 
+                  ? 'bg-[#C94C4C] text-white animate-bounce' 
+                  : 'bg-[#E0E0E0] text-gray-700'
+              }`}>
+                {killSwitchActive ? 'ACTIVE (SYSTEM PAUSED)' : 'INACTIVE (NORMAL OPERATIONAL STATE)'}
+              </span>
+            </div>
+            <p className="text-xs text-gray-500 font-medium mt-0.5">
+              Authoritative backend & smart contract protection boundary. Halts all agent task execution instantly when engaged.
+            </p>
+          </div>
+        </div>
+
+        <button
+          onClick={handleToggleKillSwitch}
+          disabled={killSwitchLoading}
+          className={`px-5 py-3 rounded-2xl text-xs font-black transition-all shadow-md flex items-center space-x-2 cursor-pointer shrink-0 disabled:opacity-50 ${
+            killSwitchActive
+              ? 'bg-[#3E8C5A] hover:bg-[#2E7D32] text-white'
+              : 'bg-[#C94C4C] hover:bg-[#A93C3C] text-white'
+          }`}
+        >
+          {killSwitchLoading && <Loader2 className="w-4 h-4 animate-spin" />}
+          <span>{killSwitchActive ? 'DEACTIVATE KILL SWITCH' : 'ENGAGE EMERGENCY KILL SWITCH'}</span>
+        </button>
       </div>
 
       {/* Loading Overlay / Spinner */}

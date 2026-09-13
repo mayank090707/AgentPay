@@ -15,10 +15,16 @@ from backend.app.core.audit_logger import log_audit_event, query_audit_logs
 from backend.app.models.audit import AuditLog
 from backend.app.models.quote import Quote, QuoteStatus
 from backend.app.models.payment import Payment
+from backend.app.models.security import SystemSetting
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/security-demo", tags=["Security Demo"])
+
+
+def is_kill_switch_active(db: Session) -> bool:
+    setting = db.query(SystemSetting).filter(SystemSetting.key == "kill_switch_active").first()
+    return setting.value.lower() == "true" if setting else False
 
 
 def _get_contract_client():
@@ -101,7 +107,21 @@ class SecuritySummaryResponse(BaseModel):
     blocked_attempts: int
     duplicate_prevention_count: int
     contract_address: str
-    enforcement_layer: str = "Sepolia Solidity Smart Contract (AgentPay.sol)"
+    agent_address: str = settings.PROVIDER_WALLET_ADDRESS or "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
+    kill_switch_active: bool = False
+    enforcement_layer: str = "Sepolia Solidity Smart Contract (AgentPay.sol) + Backend Security Boundary"
+
+
+class KillSwitchRequest(BaseModel):
+    active: bool
+    reason: Optional[str] = "Emergency pause triggered by administrator"
+
+
+class KillSwitchResponse(BaseModel):
+    active: bool
+    status: str
+    message: str
+    timestamp: str
 
 
 @router.get("/summary", response_model=SecuritySummaryResponse)
@@ -109,6 +129,7 @@ def get_security_summary(db: Session = Depends(get_db)):
     """Fetch live security metrics from contract & audit DB."""
     cc = _get_contract_client()
     metrics = _get_budget_metrics(db, cc)
+    active_kill = is_kill_switch_active(db)
 
     # Query real audit event counts
     all_logs = db.query(AuditLog).all()
@@ -117,10 +138,13 @@ def get_security_summary(db: Session = Depends(get_db)):
 
     for log in all_logs:
         et = (log.event_type or "").upper()
-        if "EXCEEDED" in et or "BLOCKED" in et or "REJECTED" in et or "FAILED" in et:
+        if "EXCEEDED" in et or "BLOCKED" in et or "REJECTED" in et or "FAILED" in et or "KILL_SWITCH" in et:
             blocked_count += 1
         if "DUPLICATE" in et or "REUSE_CONFLICT" in et or "PREVENTED" in et:
             duplicate_count += 1
+
+    agent_addr = os.getenv("AGENT_ADDRESS") or settings.PROVIDER_WALLET_ADDRESS or "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
+    contract_addr = os.getenv("CONTRACT_ADDRESS") or os.getenv("VITE_CONTRACT_ADDRESS") or settings.CONTRACT_ADDRESS or "0x220bef9d0BF075F2ea2a013Fc04Fd6575EB999B6"
 
     return SecuritySummaryResponse(
         hard_cap=f"{metrics['hard_cap']:.4f} ETH",
@@ -128,7 +152,60 @@ def get_security_summary(db: Session = Depends(get_db)):
         remaining_budget=f"{metrics['remaining']:.4f} ETH",
         blocked_attempts=blocked_count,
         duplicate_prevention_count=duplicate_count,
-        contract_address=settings.CONTRACT_ADDRESS or "0x220b3C0C30A90F8e34f711c14041b369D3c599B6",
+        contract_address=contract_addr,
+        agent_address=agent_addr,
+        kill_switch_active=active_kill,
+    )
+
+
+@router.get("/kill-switch", response_model=KillSwitchResponse)
+def get_kill_switch_status(db: Session = Depends(get_db)):
+    """Get authoritative persistent emergency kill switch state."""
+    active = is_kill_switch_active(db)
+    now_iso = datetime.utcnow().isoformat() + "Z"
+    return KillSwitchResponse(
+        active=active,
+        status="ACTIVE" if active else "INACTIVE",
+        message="Agent execution is temporarily disabled by the emergency kill switch." if active else "Agent execution operating normally.",
+        timestamp=now_iso,
+    )
+
+
+@router.post("/kill-switch", response_model=KillSwitchResponse)
+def toggle_kill_switch(req: KillSwitchRequest, db: Session = Depends(get_db)):
+    """Toggle persistent emergency kill switch state and record audit log."""
+    now_dt = datetime.utcnow()
+    now_iso = now_dt.isoformat() + "Z"
+
+    setting = db.query(SystemSetting).filter(SystemSetting.key == "kill_switch_active").first()
+    if not setting:
+        setting = SystemSetting(key="kill_switch_active", value=str(req.active).lower(), updated_at=now_dt)
+        db.add(setting)
+    else:
+        setting.value = str(req.active).lower()
+        setting.updated_at = now_dt
+    db.commit()
+
+    event_type = "KILL_SWITCH_ACTIVATED" if req.active else "KILL_SWITCH_DEACTIVATED"
+    event_reason = req.reason or ("Emergency kill switch enabled" if req.active else "Emergency kill switch disabled")
+
+    log_audit_event(
+        db=db,
+        request_id=f"req_ks_{int(time.time())}",
+        event_type=event_type,
+        details={
+            "actor": "admin",
+            "status": "ACTIVE" if req.active else "INACTIVE",
+            "reason": event_reason,
+            "timestamp": now_iso,
+        }
+    )
+
+    return KillSwitchResponse(
+        active=req.active,
+        status="ACTIVE" if req.active else "INACTIVE",
+        message="Agent execution is temporarily disabled by the emergency kill switch." if req.active else "Agent execution operating normally.",
+        timestamp=now_iso,
     )
 
 

@@ -75,7 +75,11 @@ class AgentPlanner:
         ],
         "translation": [
             r"\btranslate\b", r"\btranslation\b", r"\bhindi\b", r"\bfrench\b",
-            r"\bspanish\b", r"\bgerman\b", r"\blanguage\b", r"\breport\b"
+            r"\bspanish\b", r"\bgerman\b", r"\blanguage\b"
+        ],
+        "summarization": [
+            r"\bsummarize\b", r"\bsummary\b", r"\bsummarise\b", r"\bshort summary\b",
+            r"\bbrief summary\b", r"\bcondense\b", r"\bkey points\b"
         ],
         "storage": [
             r"\bstore\b", r"\bstorage\b", r"\bsave\b", r"\bback\s*up\b",
@@ -83,13 +87,14 @@ class AgentPlanner:
         ],
     }
 
-    # Step execution ordering (e.g. compute data first -> translate results -> store output)
-    EXECUTION_ORDER = ["compute", "translation", "storage"]
+    # Default fallback step execution ordering
+    EXECUTION_ORDER = ["compute", "translation", "summarization", "storage"]
 
     # Step human-readable reasons
     REASONS = {
         "compute": "Perform data computation / matrix analysis task.",
         "translation": "Translate input text/document to requested target language.",
+        "summarization": "Condense input text into a concise structured summary.",
         "storage": "Persist result object in decentralized / cloud storage.",
     }
 
@@ -103,27 +108,31 @@ class AgentPlanner:
         return re.sub(r"\s+", " ", goal.strip().lower())
 
     def detect_services(self, normalized_goal: str) -> List[str]:
-        """Detects required service capabilities from the normalized goal string."""
+        """Detects required service capabilities ordered by occurrence in user prompt."""
         if not normalized_goal:
             return []
 
-        detected = set()
+        first_matches = []
 
-        # Specific word context checks
         for service, patterns in self.PATTERNS.items():
+            min_pos = float("inf")
             for pattern in patterns:
-                if re.search(pattern, normalized_goal):
-                    detected.add(service)
-                    break
+                m = re.search(pattern, normalized_goal)
+                if m:
+                    if m.start() < min_pos:
+                        min_pos = m.start()
+            if min_pos < float("inf"):
+                first_matches.append((min_pos, service))
 
-        # Order detected services logically
-        ordered = [s for s in self.EXECUTION_ORDER if s in detected]
-        return ordered
+        # Sort by match position in original prompt to preserve goal dependency order
+        first_matches.sort(key=lambda x: x[0])
+        return [s for _, s in first_matches]
 
-    def find_lowest_quote_provider(self, service: str) -> tuple[str, float]:
+    def find_lowest_quote_provider(self, service: str) -> tuple[str, float, str]:
         """
-        Discovers available providers for a service and selects the one with the lowest quote.
-        Returns tuple of (provider_id, quote_eth).
+        Discovers available providers for a service capability, compares valid quotes,
+        and selects the provider with the lowest quote.
+        Returns tuple of (provider_id, quote_eth, selection_reason).
         """
         best_provider_id = ""
         lowest_quote = float("inf")
@@ -136,9 +145,10 @@ class AgentPlanner:
                     best_provider_id = p_id
 
         if not best_provider_id:
-            return ("alpha", 0.0001)  # Fallback default
+            return ("prov_trans_01", 0.00013, "Default provider assignment")
 
-        return (best_provider_id, lowest_quote)
+        reason = f"Lowest valid quote for requested capability ({service}: {lowest_quote:.6f} ETH)."
+        return (best_provider_id, lowest_quote, reason)
 
     def create_plan(self, goal: str) -> AgentPlan:
         """
@@ -152,13 +162,13 @@ class AgentPlanner:
         total_cost = 0.0
 
         for idx, service in enumerate(required_services, start=1):
-            provider_id, quote_eth = self.find_lowest_quote_provider(service)
+            provider_id, quote_eth, quote_reason = self.find_lowest_quote_provider(service)
             dependency = f"step_{idx-1}_output" if idx > 1 else None
 
             step = ServicePlanStep(
                 step_number=idx,
                 service=service,
-                reason=self.REASONS.get(service, f"Execute {service} service."),
+                reason=quote_reason,
                 input_dependency=dependency,
                 provider_id=provider_id,
                 quote_eth=quote_eth,

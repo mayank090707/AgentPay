@@ -20,6 +20,7 @@ from backend.app.core.audit_logger import log_audit_event
 from backend.app.models.agent_run import AgentRun, AgentRunStep, AgentRunStatus, AgentRunStepStatus
 from backend.app.models.quote import Quote, QuoteStatus
 from backend.app.schemas.agent_run import AgentRunRequest, AgentRunResponse, AgentRunStepResponse
+from backend.app.api.security_demo import is_kill_switch_active
 from agent.src.planner import AgentPlanner
 
 logger = logging.getLogger(__name__)
@@ -167,6 +168,8 @@ def _execute_service_step(
             "translate": "/services/translate",
             "compute": "/services/compute",
             "storage": "/services/storage",
+            "summarization": "/services/summarize",
+            "summarize": "/services/summarize",
         }
         endpoint_path = endpoint_mapping.get(service_type.lower(), f"/services/{service_type}")
 
@@ -250,6 +253,24 @@ def execute_agent_run_task(agent_run: AgentRun, db: Session) -> AgentRun:
     Executes all planned steps in an AgentRun sequentially, chaining real output data from
     step N-1 into step N. Reuses existing HTTP 402 and smart contract payment infrastructure.
     """
+    if is_kill_switch_active(db):
+        agent_run.status = AgentRunStatus.BLOCKED
+        agent_run.error_code = "KILL_SWITCH_ACTIVE"
+        agent_run.error_message = "Agent execution is temporarily disabled by the emergency kill switch."
+        db.commit()
+        log_audit_event(
+            db=db,
+            request_id=agent_run.task_id,
+            event_type="KILL_SWITCH_ACTIVE",
+            details={
+                "task_id": agent_run.task_id,
+                "error_code": "KILL_SWITCH_ACTIVE",
+                "error_message": agent_run.error_message,
+                "timestamp": datetime.utcnow().isoformat() + "Z",
+            }
+        )
+        return agent_run
+
     if agent_run.status == AgentRunStatus.BLOCKED:
         return agent_run
 
@@ -272,9 +293,12 @@ def execute_agent_run_task(agent_run: AgentRun, db: Session) -> AgentRun:
         if service_type == "translation":
             input_text = accumulated_output if (step.input_dependency and accumulated_output) else _extract_translation_text(agent_run.user_prompt)
             payload.update({"text": input_text, "source_lang": "en", "target_lang": "hi"})
+        elif service_type == "summarization":
+            input_text = accumulated_output if (step.input_dependency and accumulated_output) else agent_run.user_prompt
+            payload.update({"text": input_text, "max_length": 150})
         elif service_type == "storage":
             val_to_store = accumulated_output if (step.input_dependency and accumulated_output) else f"Stored output for '{agent_run.user_prompt}'"
-            payload.update({"key": "translated_document", "value": val_to_store, "ttl_seconds": 3600})
+            payload.update({"key": "processed_document", "value": val_to_store, "ttl_seconds": 3600})
         elif service_type == "compute":
             payload.update({"operation": "matrix_multiply", "params": {"data": accumulated_output or "dataset_snapshot", "matrix_size": 100}})
 
@@ -294,6 +318,8 @@ def execute_agent_run_task(agent_run: AgentRun, db: Session) -> AgentRun:
             # Extract output for subsequent step chaining
             if service_type == "translation":
                 accumulated_output = output_data.get("translated_text") or output_data.get("text") or json.dumps(output_data)
+            elif service_type == "summarization":
+                accumulated_output = output_data.get("summary") or output_data.get("text") or json.dumps(output_data)
             elif service_type == "compute":
                 accumulated_output = json.dumps(output_data.get("result") or output_data)
             elif service_type == "storage":
@@ -449,6 +475,9 @@ def create_agent_run(req: AgentRunRequest, background_tasks: BackgroundTasks, db
     if req.max_budget_eth is not None and req.max_budget_eth > 0:
         remaining_budget_eth = min(remaining_budget_eth, req.max_budget_eth)
 
+    # Evaluate plan cost against remaining budget → sets plan.budget_status
+    plan = planner.evaluate_budget(plan, remaining_budget_eth)
+
     # Check for unsupported goal
     if len(plan.steps) == 0:
         err_code = "UNSUPPORTED_GOAL"
@@ -496,10 +525,13 @@ def create_agent_run(req: AgentRunRequest, background_tasks: BackgroundTasks, db
             created_at=agent_run.created_at.isoformat() + "Z",
         )
 
+    # Check emergency kill switch state
+    if is_kill_switch_active(db):
+        run_status = AgentRunStatus.BLOCKED
+        err_code = "KILL_SWITCH_ACTIVE"
+        err_msg = "Agent execution is temporarily disabled by the emergency kill switch."
     # Evaluate plan against remaining budget
-    plan = planner.evaluate_budget(plan, remaining_budget_eth)
-
-    if plan.budget_status == "WITHIN_BUDGET":
+    elif plan.budget_status == "WITHIN_BUDGET":
         run_status = AgentRunStatus.PLANNED
         err_code = None
         err_msg = None
@@ -582,6 +614,15 @@ def execute_agent_run(task_id: str, background_tasks: BackgroundTasks, db: Sessi
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Agent run with task_id '{task_id}' not found."
         )
+
+    # Check emergency kill switch state
+    if is_kill_switch_active(db):
+        agent_run.status = AgentRunStatus.BLOCKED
+        agent_run.error_code = "KILL_SWITCH_ACTIVE"
+        agent_run.error_message = "Agent execution is temporarily disabled by the emergency kill switch."
+        db.commit()
+        db.refresh(agent_run)
+        return _build_agent_run_response(agent_run)
 
     # Idempotency guard: prevent duplicate executions or double payments
     if agent_run.status in [AgentRunStatus.EXECUTING, AgentRunStatus.COMPLETED, AgentRunStatus.BLOCKED, AgentRunStatus.FAILED]:

@@ -54,9 +54,10 @@ export default function Agent() {
 
   // Preset Prompt Chips
   const presetPrompts = [
-    "Translate 'Hello World' into Hindi and store the result.",
-    "Analyze dataset and translate summary report",
-    "Translate 'Autonomous Payment' into French",
+    "Summarize the market analysis report and translate the summary into Hindi",
+    "Translate 'Autonomous Payment' into Hindi and store the result",
+    "Summarize document snapshot and store output",
+    "Translate 'Hello World' into Spanish and store the result",
     "Compute matrix multiplication dataset and store proof"
   ];
 

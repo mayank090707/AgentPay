@@ -37,6 +37,12 @@ class StorageRequest(BaseModel):
     provider_id: Optional[str] = Field(None, description="Optional provider ID from /providers registry. Defaults to the backend's configured provider.")
 
 
+class SummarizationRequest(BaseModel):
+    text: str = Field(..., description="Text to summarize")
+    max_length: Optional[int] = Field(150, description="Target summary length in words")
+    provider_id: Optional[str] = Field(None, description="Optional provider ID from /providers registry.")
+
+
 # Generic Payment Proof Header / Schema
 class PaymentProof(BaseModel):
     quote_id: str

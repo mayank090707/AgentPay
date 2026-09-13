@@ -17,9 +17,12 @@ PHASE 2A ARCHITECTURAL BOUNDARIES:
 from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
 import json
+import logging
 from typing import Any, Optional
 
 import httpx
+
+logger = logging.getLogger(__name__)
 
 from agent.src.config import get_settings
 from agent.src.exceptions import (
@@ -149,6 +152,13 @@ class ProviderClient:
             "X-Request-ID": req_id_str,
         }
 
+        logger.info(
+            "Sending Provider Request | provider=%s | method=POST | url=%s | request_id=%s",
+            service_request.provider,
+            target_url,
+            req_id_str,
+        )
+
         try:
             if self._http_client is not None:
                 response = self._http_client.post(
@@ -236,6 +246,13 @@ class ProviderClient:
             if service_request.parameters:
                 payload["parameters"] = service_request.parameters
 
+        logger.info(
+            "Sending Paid Provider Retry Request | provider=%s | method=POST | url=%s | request_id=%s",
+            service_request.provider,
+            target_url,
+            req_id_str,
+        )
+
         try:
             if self._http_client is not None:
                 response = self._http_client.post(
@@ -269,6 +286,14 @@ class ProviderClient:
         """Process and map provider HTTP response into typed ProviderResponse."""
         req_id_str = str(service_request.request_id)
         status = response.status_code
+
+        logger.info(
+            "Received Provider Response | provider=%s | url=%s | status_code=%s | request_id=%s",
+            service_request.provider,
+            str(response.url),
+            status,
+            req_id_str,
+        )
 
         # 1. HTTP 2xx: Successful fulfillment
         if 200 <= status < 300:

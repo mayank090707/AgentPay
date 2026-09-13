@@ -1,4 +1,5 @@
 import json
+import logging
 import uuid
 import os
 import time
@@ -6,6 +7,8 @@ from datetime import datetime, timedelta
 from typing import Optional
 from pydantic import BaseModel, SecretStr
 from eth_utils import keccak
+
+logger = logging.getLogger(__name__)
 
 from fastapi import APIRouter, Depends, Header, HTTPException, status
 from fastapi.responses import JSONResponse
@@ -465,6 +468,7 @@ def handle_service_execution(
 
 
 @router.post("/translate")
+@router.post("/translation")
 def service_translate(
     request: TranslationRequest,
     x_payment_proof: Optional[str] = Header(None, alias="X-Payment-Proof"),
@@ -598,6 +602,22 @@ def purchase_service_endpoint(
             payer_address=agent_addr,
         )
 
+        endpoint_mapping = {
+            "translation": "/services/translate",
+            "translate": "/services/translate",
+            "compute": "/services/compute",
+            "storage": "/services/storage",
+        }
+        endpoint_path = endpoint_mapping.get(service_type.lower(), f"/services/{service_type}")
+
+        logger.info(
+            "Initiating provider request | provider=%s | service=%s | endpoint_path=%s | request_id=%s",
+            provider_id,
+            service_type,
+            endpoint_path,
+            req_id_str,
+        )
+
         service_req = ServiceRequest(
             request_id=RequestId(req_id_str),
             service=service_type,
@@ -605,7 +625,7 @@ def purchase_service_endpoint(
             provider=provider_id,
         )
 
-        result = orchestrator.run(service_req, endpoint_path=f"/services/{service_type}")
+        result = orchestrator.run(service_req, endpoint_path=endpoint_path)
 
         return {
             "status": "success",

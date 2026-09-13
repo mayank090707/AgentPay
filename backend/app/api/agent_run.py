@@ -183,7 +183,7 @@ def _execute_service_step(
                 res_data = result_obj.delivery_result.result or res_data
             return {
                 "request_id": req_id_str,
-                "transaction_hash": getattr(result_obj, "transaction_hash", None) or getattr(result_obj, "tx_hash", None) or "0x" + "1"*64,
+                "transaction_hash": getattr(result_obj, "payment_reference", None) or getattr(result_obj, "transaction_hash", None) or getattr(result_obj, "tx_hash", None) or "0x" + "1"*64,
                 "content_hash": getattr(result_obj, "content_hash", None) or "0x" + "0"*64,
                 "data": res_data,
                 "amount": step.quote_eth,

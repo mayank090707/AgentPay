@@ -1,0 +1,8 @@
+=== TASK ID: f35c24a9-bea9-42e4-ad52-6fa825579a4d ===
+Prompt: Translate 'Hello World' into Hindi and store the result.
+Status: FAILED
+Error Code: PAYMENT_ERROR
+Error Message: Error waiting for transaction receipt: Transaction HexBytes('0x67f8616b684b53774f6275b38daf93c9cf2ceaa465438edf6c354a1a632948a5') is not in the chain after 120 seconds [request_id=0x72cab03c70733ee9fc097033ffca5641d7f9018d39c9205107007747fc69d27c, code=RECEIPT_TIMEOUT]
+Steps:
+  Step 1 [translation]: status=FAILED, tx=None, res=None
+  Step 2 [storage]: status=PLANNED, tx=None, res=None

@@ -1,0 +1,91 @@
+Total runs found: 10
+=== TASK ID: 79007f8b-04ac-4acd-8042-4f7741d0ecd3 ===
+Prompt: Translate Hello World into Hindi and store the result.
+Status: COMPLETED
+Error Code: None
+Error Message: None
+Created At: 2026-09-13 09:11:12.008490
+Steps:
+  Step 1 [translation]: status=FULFILLED, provider=beta, quote=5e-05, tx=0xe345437797b03483583d183f07d2825a96ab162d546fccb922e43f3222a44799, err_code=None, err_msg=None
+  Step 2 [storage]: status=FULFILLED, provider=beta, quote=8e-05, tx=0x487d714dc40f381c20d9a1575330aa557a26265a8a689b1100bad2a919f6b602, err_code=None, err_msg=None
+=== TASK ID: b3548ff9-d6c0-4043-a371-5a58baf2fce4 ===
+Prompt: Translate Hello World into Hindi and store the result.
+Status: EXECUTING
+Error Code: None
+Error Message: None
+Created At: 2026-09-13 09:10:18.741095
+Steps:
+  Step 1 [translation]: status=EXECUTING, provider=beta, quote=5e-05, tx=None, err_code=None, err_msg=None
+  Step 2 [storage]: status=PLANNED, provider=beta, quote=8e-05, tx=None, err_code=None, err_msg=None
+=== TASK ID: 228270a5-782b-4d87-b9c7-8a283a9f9bd5 ===
+Prompt: Translate Hello World into Hindi and store the result.
+Status: FAILED
+Error Code: NOT_FOUND
+Error Message: 400: Quote 'b585368e-cb69-4d1d-8488-44d1215c7b27' is marked PAID but payment record was not found.
+Created At: 2026-09-13 09:09:25.611441
+Steps:
+  Step 1 [translation]: status=FAILED, provider=beta, quote=5e-05, tx=None, err_code=NOT_FOUND, err_msg=400: Quote 'b585368e-cb69-4d1d-8488-44d1215c7b27' is marked PAID but payment record was not found.
+  Step 2 [storage]: status=PLANNED, provider=beta, quote=8e-05, tx=None, err_code=None, err_msg=None
+=== TASK ID: 878a4106-6e92-4dff-b9dd-57c227937e52 ===
+Prompt: Translate Hello World into Hindi and store the result.
+Status: FAILED
+Error Code: UNKNOWN_ERROR
+Error Message: 400: Invalid X-Payment-Proof header JSON format.
+Created At: 2026-09-13 09:09:02.371479
+Steps:
+  Step 1 [translation]: status=FAILED, provider=beta, quote=5e-05, tx=None, err_code=UNKNOWN_ERROR, err_msg=400: Invalid X-Payment-Proof header JSON format.
+  Step 2 [storage]: status=PLANNED, provider=beta, quote=8e-05, tx=None, err_code=None, err_msg=None
+=== TASK ID: 1b42445a-a495-41f4-adf9-77e55a3ce12f ===
+Prompt: Translate Hello World into Hindi and store the result.
+Status: FAILED
+Error Code: UNKNOWN_ERROR
+Error Message: 400: Invalid X-Payment-Proof header JSON format.
+Created At: 2026-09-13 09:08:25.530182
+Steps:
+  Step 1 [translation]: status=FAILED, provider=beta, quote=5e-05, tx=None, err_code=UNKNOWN_ERROR, err_msg=400: Invalid X-Payment-Proof header JSON format.
+  Step 2 [storage]: status=PLANNED, provider=beta, quote=8e-05, tx=None, err_code=None, err_msg=None
+=== TASK ID: c91dd0e7-bafd-44f1-ba84-d219196a93ac ===
+Prompt: Translate Hello World into Hindi and store the result.
+Status: FAILED
+Error Code: EXECUTION_ERROR
+Error Message: 'Settings' object has no attribute 'AGENT_WALLET_ADDRESS'
+Created At: 2026-09-13 09:08:01.855018
+Steps:
+  Step 1 [translation]: status=FAILED, provider=beta, quote=5e-05, tx=None, err_code=EXECUTION_ERROR, err_msg='Settings' object has no attribute 'AGENT_WALLET_ADDRESS'
+  Step 2 [storage]: status=PLANNED, provider=beta, quote=8e-05, tx=None, err_code=None, err_msg=None
+=== TASK ID: 0204ca7c-b798-4852-afe3-a43b4ebaf7eb ===
+Prompt: Translate Hello World into Hindi and store the result.
+Status: FAILED
+Error Code: UNKNOWN_ERROR
+Error Message: cannot import name 'generate_payment_proof' from 'backend.app.core.receipt_generator' (C:\Users\Mayank Sharma\Desktop\AgentPay\backend\app\core\receipt_generator.py)
+Created At: 2026-09-13 09:07:33.692971
+Steps:
+  Step 1 [translation]: status=FAILED, provider=beta, quote=5e-05, tx=None, err_code=UNKNOWN_ERROR, err_msg=cannot import name 'generate_payment_proof' from 'backend.app.core.receipt_generator' (C:\Users\Mayank Sharma\Desktop\AgentPay\backend\app\core\receipt_generator.py)
+  Step 2 [storage]: status=PLANNED, provider=beta, quote=8e-05, tx=None, err_code=None, err_msg=None
+=== TASK ID: 89b39e27-35a7-443f-adad-32b106bca3e8 ===
+Prompt: Translate Hello World into Hindi and store the result.
+Status: FAILED
+Error Code: UNKNOWN_ERROR
+Error Message: cannot import name 'generate_payment_proof' from 'backend.app.core.receipt_generator' (C:\Users\Mayank Sharma\Desktop\AgentPay\backend\app\core\receipt_generator.py)
+Created At: 2026-09-13 09:07:19.796903
+Steps:
+  Step 1 [translation]: status=FAILED, provider=beta, quote=5e-05, tx=None, err_code=UNKNOWN_ERROR, err_msg=cannot import name 'generate_payment_proof' from 'backend.app.core.receipt_generator' (C:\Users\Mayank Sharma\Desktop\AgentPay\backend\app\core\receipt_generator.py)
+  Step 2 [storage]: status=PLANNED, provider=beta, quote=8e-05, tx=None, err_code=None, err_msg=None
+=== TASK ID: a086cd5c-4373-467d-8247-212d8b8adb54 ===
+Prompt: Translate Hello World into Hindi and store the result.
+Status: FAILED
+Error Code: UNKNOWN_ERROR
+Error Message: cannot import name 'generate_payment_proof' from 'backend.app.core.receipt_generator' (C:\Users\Mayank Sharma\Desktop\AgentPay\backend\app\core\receipt_generator.py)
+Created At: 2026-09-13 09:07:10.133816
+Steps:
+  Step 1 [translation]: status=FAILED, provider=beta, quote=5e-05, tx=None, err_code=UNKNOWN_ERROR, err_msg=cannot import name 'generate_payment_proof' from 'backend.app.core.receipt_generator' (C:\Users\Mayank Sharma\Desktop\AgentPay\backend\app\core\receipt_generator.py)
+  Step 2 [storage]: status=PLANNED, provider=beta, quote=8e-05, tx=None, err_code=None, err_msg=None
+=== TASK ID: 00ad45ca-76bb-40fb-81c7-3902f18f3adb ===
+Prompt: Translate 'Hello World' into Hindi and store the result.
+Status: FAILED
+Error Code: UNKNOWN_ERROR
+Error Message: cannot import name 'generate_payment_proof' from 'backend.app.core.receipt_generator' (C:\Users\Mayank Sharma\Desktop\AgentPay\backend\app\core\receipt_generator.py)
+Created At: 2026-09-13 09:06:37.752561
+Steps:
+  Step 1 [translation]: status=FAILED, provider=beta, quote=5e-05, tx=None, err_code=UNKNOWN_ERROR, err_msg=cannot import name 'generate_payment_proof' from 'backend.app.core.receipt_generator' (C:\Users\Mayank Sharma\Desktop\AgentPay\backend\app\core\receipt_generator.py)
+  Step 2 [storage]: status=PLANNED, provider=beta, quote=8e-05, tx=None, err_code=None, err_msg=None

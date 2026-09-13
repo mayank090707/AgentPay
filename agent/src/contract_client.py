@@ -376,7 +376,7 @@ class ContractClient:
         # Await transaction receipt
         try:
             logger.info("[CONTRACT RECEIPT WAIT] tx_hash=%s request_id=%s", tx_hash_hex, req_id_str)
-            receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash, timeout=120)
+            receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash, timeout=180)
             if receipt.get("status") == 0:
                 # Transaction mined but reverted
                 raise PaymentAuthorizationError(
@@ -446,7 +446,7 @@ class ContractClient:
             tx_hash_hex = HexBytes(tx_hash).to_0x_hex()
             logger.info("recordDelivery broadcast: tx_hash=%s request_id=%s", tx_hash_hex, req_id_str)
 
-            receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash, timeout=120)
+            receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash, timeout=180)
             if receipt.get("status") == 0:
                 raise ContractError(
                     f"recordDelivery reverted on-chain: tx_hash={tx_hash_hex}",

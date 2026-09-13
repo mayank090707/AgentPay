@@ -333,21 +333,22 @@ class ContractClient:
                 "from": self.agent_address,
                 "nonce": nonce,
                 "gasPrice": gas_price,
+                "gas": 65000,
                 "chainId": self.chain_id,
             })
 
-            # Estimate gas with a safety buffer
+            # Estimate gas with a safety buffer if possible
             try:
                 estimated_gas = self.w3.eth.estimate_gas(tx_data)
                 tx_data["gas"] = int(estimated_gas * 1.15)
             except Exception as est_err:
-                # If gas estimation failed due to a contract revert, map revert reason immediately
                 self._handle_revert(est_err, req_id_str)
-                tx_data["gas"] = 95000
+                tx_data["gas"] = 65000
 
         except ContractError:
             raise
         except Exception as exc:
+            self._handle_revert(exc, req_id_str)
             raise PaymentAuthorizationError(
                 f"Failed to construct authorizePayment transaction: {str(exc)}",
                 code="TX_BUILD_FAILED",
@@ -438,6 +439,7 @@ class ContractClient:
                 "from": self.agent_address,
                 "nonce": nonce,
                 "gasPrice": gas_price,
+                "gas": 50000,
                 "chainId": self.chain_id,
             })
 
@@ -445,7 +447,7 @@ class ContractClient:
                 estimated_gas = self.w3.eth.estimate_gas(tx_data)
                 tx_data["gas"] = int(estimated_gas * 1.15)
             except Exception:
-                tx_data["gas"] = 75000
+                tx_data["gas"] = 50000
 
             signed_tx = self.w3.eth.account.sign_transaction(
                 tx_data,

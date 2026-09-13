@@ -13,13 +13,13 @@ def test_get_pricing_catalog(client):
 
 
 def test_calculate_translation_pricing():
-    # 50 chars -> 1 unit -> 0.00005
+    # 50 chars -> 1 unit -> 0.00002
     price1 = calculate_service_price("translation", {"text": "Hello world"})
-    assert price1 == 0.00005
+    assert price1 == 0.00002
 
-    # 250 chars -> 3 units -> 0.00015
+    # 250 chars -> 3 units -> 0.00006
     price2 = calculate_service_price("translation", {"text": "a" * 250})
-    assert price2 == 0.00015
+    assert price2 == 0.00006
 
 
 def test_calculate_compute_pricing():

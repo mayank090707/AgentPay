@@ -116,7 +116,7 @@ export const mockProviders = [
     id: "p1",
     name: "Beta Cloud",
     service: "Translation",
-    price: 0.00005,
+    price: 0.00002,
     currency: "ETH",
     quality: 94,
     qualityLabel: "94%",
@@ -240,7 +240,7 @@ export const mockCurrentTask = {
   prompt: "Translate this document into Hindi",
   service: "Translation",
   provider: "Beta Cloud",
-  requestedAmount: "0.00005 ETH",
+  requestedAmount: "0.00002 ETH",
   request_id: "A104",
   status: "Processing"
 };
@@ -306,7 +306,7 @@ export const mockPipelineSteps = [
 
 export const mockAgentLogs = [
   { time: "12:31:02", text: "Agent initiated Translation request (#A104)" },
-  { time: "12:31:03", text: "Provider Beta Cloud returned 402 Payment Required (0.00005 ETH)" },
+  { time: "12:31:03", text: "Provider Beta Cloud returned 402 Payment Required (0.00002 ETH)" },
   { time: "12:31:04", text: "Payment authorization requested for Request ID #A104" },
   { time: "12:31:05", text: "Smart contract verified spending limit (0.0005 ETH spent / 0.10 ETH cap)" },
   { time: "12:31:06", text: "Sepolia payment confirmed (Tx: 0x89f2a1...3a1c)" },

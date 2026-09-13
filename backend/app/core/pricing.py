@@ -6,9 +6,9 @@ PRICING_CATALOG: Dict[str, ServicePriceInfo] = {
     "translation": ServicePriceInfo(
         service_type="translation",
         unit="100 chars",
-        price_per_unit=0.00005,
+        price_per_unit=0.00002,
         currency="ETH",
-        description="AI text translation (0.00005 ETH per 100 characters)"
+        description="AI text translation (0.00002 ETH per 100 characters)"
     ),
     "compute": ServicePriceInfo(
         service_type="compute",

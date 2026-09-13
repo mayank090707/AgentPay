@@ -436,9 +436,9 @@ export default function Agent() {
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1 text-xs">
               {(providerComparison.length > 0 ? providerComparison : [
-                { provider_id: 'prov_trans_01', name: 'Translation Provider A', quote_eth: 0.00013 },
-                { provider_id: 'prov_trans_03', name: 'Translation Provider C', quote_eth: 0.00015 },
-                { provider_id: 'prov_trans_02', name: 'Translation Provider B', quote_eth: 0.00018 },
+                { provider_id: 'prov_trans_01', name: 'Translation Provider A', quote_eth: 0.00002 },
+                { provider_id: 'prov_trans_03', name: 'Translation Provider C', quote_eth: 0.000025 },
+                { provider_id: 'prov_trans_02', name: 'Translation Provider B', quote_eth: 0.00003 },
               ]).map((p) => {
                 const isSelected = steps.some(s => s.provider_id === p.provider_id || (p.provider_id === 'prov_trans_01' && s.service === 'translation'));
                 return (

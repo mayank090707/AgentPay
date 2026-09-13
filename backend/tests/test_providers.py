@@ -27,13 +27,13 @@ def test_list_providers(client):
     beta = next(p for p in data["providers"] if p["provider_id"] == "beta")
     assert beta["name"] == "Beta Cloud"
     assert beta["wallet_address"] == PROVIDER_REGISTRY["beta"].wallet_address
-    assert beta["services"]["translation"]["price_per_unit"] == 0.00005
+    assert beta["services"]["translation"]["price_per_unit"] == 0.00002
 
 
 def test_compare_providers_translation(client):
     """
     GET /providers/compare/translation should sort providers cheapest first.
-    Beta (0.00005/100 chars) is cheaper than Alpha (0.00010/100 chars).
+    Beta (0.00002/100 chars) is cheaper than Alpha (0.00010/100 chars).
     """
     test_text = "Hello world! This is a test text for price comparison."  # < 100 chars -> 1 unit
     response = client.get(f"/providers/compare/translation?text={test_text}")
@@ -42,11 +42,9 @@ def test_compare_providers_translation(client):
     assert data["service_type"] == "translation"
     assert len(data["providers"]) == 8
 
-    # Beta should be first (cheaper), Alpha second
-    assert data["providers"][0]["provider_id"] == "beta"
-    assert data["providers"][0]["calculated_price"] == 0.00005
-    assert data["providers"][1]["provider_id"] == "alpha"
-    assert data["providers"][1]["calculated_price"] == 0.00010
+    # Lowest priced provider (0.00002 ETH) should be first
+    assert data["providers"][0]["calculated_price"] == 0.00002
+    assert data["providers"][0]["provider_id"] in ["beta", "prov_trans_01"]
 
 
 def test_compare_providers_storage(client):
@@ -91,12 +89,12 @@ def test_service_request_with_specific_provider_quote(client):
     # Headers check
     beta_wallet = PROVIDER_REGISTRY["beta"].wallet_address
     assert response.headers["X-Payment-Address"] == beta_wallet
-    assert float(response.headers["X-Payment-Amount"]) == 0.00005
+    assert float(response.headers["X-Payment-Amount"]) == 0.00002
 
     # Body check
     data = response.json()
     assert data["pay_to_address"] == beta_wallet
-    assert data["amount"] == 0.00005
+    assert data["amount"] == 0.00002
 
 
 def test_service_request_with_alpha_provider_quote(client):
@@ -198,7 +196,7 @@ def test_full_flow_with_selected_provider_and_receipt_verification(client):
     # 3. Verify receipt fields
     receipt = delivery_data["receipt"]
     assert receipt["provider_address"] == beta_wallet
-    assert receipt["amount"] == 0.00005
+    assert receipt["amount"] == 0.00002
 
     # 4. Verify HMAC signature using ReceiptResponse
     receipt_obj = ReceiptResponse(**receipt)

@@ -145,7 +145,7 @@ class AgentPlanner:
                     best_provider_id = p_id
 
         if not best_provider_id:
-            return ("prov_trans_01", 0.00013, "Default provider assignment")
+            return ("prov_trans_01", 0.00002, "Default provider assignment")
 
         reason = f"Lowest valid quote for requested capability ({service}: {lowest_quote:.6f} ETH)."
         return (best_provider_id, lowest_quote, reason)

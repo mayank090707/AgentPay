@@ -321,10 +321,6 @@ export default function Agent() {
             <Sparkles className="w-4 h-4 text-[#d97d54]" />
             <span>Enter the content you want translated into Hindi</span>
           </label>
-          <span className="px-2.5 py-1 rounded-xl text-[10px] font-extrabold bg-[#E3F2FD] text-[#2563EB] border border-[#BBDEFB] inline-flex items-center space-x-1">
-            <Languages className="w-3 h-3" />
-            <span>Target Language: Hindi</span>
-          </span>
         </div>
 
         <form onSubmit={handleRunAgent} className="space-y-3">

@@ -32,10 +32,11 @@ export default function Audit() {
   const [isBackendLive, setIsBackendLive] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Initial load: Fetch Audit Logs
+  // Initial load & Purchase Completed Event Listener
   useEffect(() => {
     let isMounted = true;
-    async function loadAuditTrail() {
+
+    async function loadAuditTrail(selectNewest = false) {
       setIsLoading(true);
       try {
         const res = await fetchAuditLogs({ limit: 200 });
@@ -44,7 +45,11 @@ export default function Audit() {
         if (res && Array.isArray(res.logs)) {
           const parsed = parseAuditLogsToTransactions(res.logs);
           setTransactions(parsed);
-          setSelectedRequestId(parsed[0]?.request_id || null);
+          if (selectNewest && parsed.length > 0) {
+            setSelectedRequestId(parsed[0].request_id);
+          } else {
+            setSelectedRequestId((prev) => prev || parsed[0]?.request_id || null);
+          }
           setIsBackendLive(true);
         } else {
           setTransactions([]);
@@ -64,8 +69,19 @@ export default function Audit() {
 
     loadAuditTrail();
 
+    const handlePurchaseCompleted = (evt) => {
+      const newReqId = evt.detail?.request_id;
+      if (newReqId) {
+        setSelectedRequestId(newReqId);
+      }
+      loadAuditTrail(true);
+    };
+
+    window.addEventListener('agentpay:purchase_completed', handlePurchaseCompleted);
+
     return () => {
       isMounted = false;
+      window.removeEventListener('agentpay:purchase_completed', handlePurchaseCompleted);
     };
   }, []);
 
@@ -112,9 +128,14 @@ export default function Audit() {
     });
   }, [transactions, searchTerm, statusFilter]);
 
-  // Selected Transaction Object
+  // Selected Transaction Object (Case-insensitive lookup)
   const selectedTx = useMemo(() => {
-    return transactions.find(t => t.request_id === selectedRequestId) || transactions[0] || null;
+    if (!selectedRequestId) return transactions[0] || null;
+    return (
+      transactions.find(
+        (t) => (t.request_id || '').toLowerCase() === selectedRequestId.toLowerCase()
+      ) || transactions[0] || null
+    );
   }, [transactions, selectedRequestId]);
 
   const isBlocked = selectedTx?.delivery_status === 'Blocked';

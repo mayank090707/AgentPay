@@ -215,5 +215,12 @@ export function parseAuditLogsToTransactions(logs = []) {
     });
   });
 
+  // Sort transactions newest first
+  transactions.sort((a, b) => {
+    const timeA = new Date(a.rawLogs[a.rawLogs.length - 1]?.timestamp || 0).getTime();
+    const timeB = new Date(b.rawLogs[b.rawLogs.length - 1]?.timestamp || 0).getTime();
+    return timeB - timeA;
+  });
+
   return transactions;
 }

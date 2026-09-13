@@ -216,6 +216,9 @@ export default function Providers() {
 
         await new Promise(r => setTimeout(r, 400));
         setPurchaseModal(prev => ({ ...prev, step: 7, status: 'completed' }));
+
+        // Dispatch purchase completion event so Payments and Audit pages refresh live data
+        window.dispatchEvent(new CustomEvent('agentpay:purchase_completed', { detail: res }));
       } else {
         throw new Error(res?.detail || res?.message || 'Purchase execution failed');
       }
@@ -225,6 +228,7 @@ export default function Providers() {
         status: 'error',
         error: err.message || 'Service request failed',
       }));
+      window.dispatchEvent(new CustomEvent('agentpay:purchase_completed', { detail: { error: err.message } }));
     }
   };
 

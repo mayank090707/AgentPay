@@ -56,6 +56,16 @@ export default function Payments() {
 
   useEffect(() => {
     loadTransactions();
+
+    const handlePurchaseCompleted = () => {
+      loadTransactions();
+    };
+
+    window.addEventListener('agentpay:purchase_completed', handlePurchaseCompleted);
+
+    return () => {
+      window.removeEventListener('agentpay:purchase_completed', handlePurchaseCompleted);
+    };
   }, []);
 
   // Calculate live stats

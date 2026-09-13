@@ -72,7 +72,7 @@ export default function TransactionModal({ transaction, onClose }) {
                 {/* Step 2: Payment */}
                 <div className="p-2.5 bg-[#FFF9F5] border border-[#E9D8CC] rounded-xl flex justify-between items-center">
                   <span className="font-semibold text-gray-500">PAYMENT</span>
-                  <span className="font-extrabold text-[#343434]">₹{transaction.amount.toFixed(2)}</span>
+                  <span className="font-extrabold text-[#343434]">{transaction.amountEth || `₹${transaction.amount.toFixed(2)}`}</span>
                 </div>
 
                 <div className="flex justify-center text-gray-300">
@@ -124,7 +124,7 @@ export default function TransactionModal({ transaction, onClose }) {
                 </div>
                 <div className="p-3 bg-[#FFF9F5] border border-[#E9D8CC] rounded-xl">
                   <span className="text-gray-400 block text-[10px]">Requested Amount</span>
-                  <span className="font-extrabold text-[#C94C4C]">₹{transaction.amount.toFixed(2)}</span>
+                  <span className="font-extrabold text-[#C94C4C]">{transaction.amountEth || `₹${transaction.amount.toFixed(2)}`}</span>
                 </div>
                 <div className="p-3 bg-[#FFF9F5] border border-[#E9D8CC] rounded-xl">
                   <span className="text-gray-400 block text-[10px]">Reason</span>
@@ -136,7 +136,7 @@ export default function TransactionModal({ transaction, onClose }) {
                 </div>
                 <div className="p-3 bg-[#FFF9F5] border border-[#E9D8CC] rounded-xl">
                   <span className="text-gray-400 block text-[10px]">Payment Deducted</span>
-                  <span className="font-extrabold text-[#3E8C5A]">₹0.00</span>
+                  <span className="font-extrabold text-[#3E8C5A]">{transaction.amountEth ? '0.00 ETH' : '₹0.00'}</span>
                 </div>
                 <div className="p-3 bg-[#FFF9F5] border border-[#E9D8CC] rounded-xl">
                   <span className="text-gray-400 block text-[10px]">Delivery Status</span>

@@ -111,6 +111,7 @@ class Orchestrator:
 
         # Step 3: Call ProviderClient for initial request
         try:
+            logger.info("[PROVIDER REQUEST] endpoint=%s service=%s", effective_endpoint, request.service)
             response = self.provider_client.request_service(
                 service_request=request,
                 endpoint_path=effective_endpoint,
@@ -129,6 +130,12 @@ class Orchestrator:
         # Step 4: Handle HTTP 402 (Payment Required)
         if response.is_payment_required and response.payment_requirement is not None:
             payment_req = response.payment_requirement
+            logger.info(
+                "[402 RECEIVED] quote_id=%s amount=%s currency=%s",
+                payment_req.metadata.get("quote_id") if payment_req.metadata else None,
+                payment_req.amount,
+                payment_req.currency,
+            )
             state = self.state_manager.transition_to(
                 AgentStage.HTTP_402_RECEIVED,
                 amount=payment_req.amount,
@@ -218,6 +225,7 @@ class Orchestrator:
         """
         assert self.payment_client is not None
         req_id_str = str(request.request_id)
+        logger.info("[PAYMENT START] request_id=%s service=%s amount=%s", req_id_str, request.service, payment_req.amount)
 
         # 1. CONTRACT_AUTHORIZING
         state = self.state_manager.transition_to(
@@ -303,6 +311,7 @@ class Orchestrator:
         )
 
         try:
+            logger.info("[PAID RETRY START] quote_id=%s tx_hash=%s endpoint=%s", quote_id, payment_result.transaction_hash, endpoint_path)
             paid_resp = self.provider_client.paid_request_service(
                 service_request=request,
                 quote_id=quote_id,
@@ -338,6 +347,7 @@ class Orchestrator:
 
         delivery_result = paid_resp.delivery_result
         content_hash = delivery_result.content_hash or ""
+        logger.info("[SERVICE RESULT] content_hash=%s request_id=%s", content_hash, req_id_str)
 
         # 5. SERVICE_FULFILLED
         state = self.state_manager.transition_to(
@@ -356,6 +366,7 @@ class Orchestrator:
                 record_hash = content_hash if content_hash.startswith("0x") else f"0x{content_hash}"
                 logger.info("Recording delivery on-chain: request_id=%s hash=%s", req_id_str, record_hash)
                 self.contract_client.record_delivery(request.request_id, record_hash)
+                logger.info("[DELIVERY RECORDED] request_id=%s hash=%s", req_id_str, record_hash)
                 state = self.state_manager.transition_to(AgentStage.RECEIPT_RECORDED)
                 self.event_emitter.publish(
                     AgentEvent.from_state(AgentEventType.RECEIPT_RECORDED, state)

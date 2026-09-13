@@ -104,7 +104,7 @@ def _execute_service_step(
     # Check if full on-chain Orchestrator env is available
     rpc_url = os.getenv("RPC_URL") or os.getenv("SEPOLIA_RPC_URL") or settings.RPC_URL
     contract_addr = os.getenv("CONTRACT_ADDRESS") or os.getenv("VITE_CONTRACT_ADDRESS") or settings.CONTRACT_ADDRESS
-    agent_addr = os.getenv("AGENT_ADDRESS")
+    agent_addr = os.getenv("AGENT_ADDRESS") or settings.PROVIDER_WALLET_ADDRESS
     agent_pk = os.getenv("AGENT_PRIVATE_KEY")
 
     req_id_str = "0x" + keccak(text=f"step_{step.id}_{time.time()}").hex()
@@ -194,7 +194,13 @@ def _execute_service_step(
 
     # Local backend execution fallback (HTTP 402 + DB logging)
     from backend.app.api.services import handle_service_execution
-    from backend.app.core.receipt_generator import generate_payment_proof
+
+    def generate_payment_proof(quote_id: str, tx_hash: str, payer_address: str) -> str:
+        return json.dumps({
+            "quote_id": quote_id,
+            "tx_hash": tx_hash,
+            "payer_address": payer_address
+        })
 
     # Step A: Initiate request without proof -> get 402 Payment Required quote
     resp = handle_service_execution(service_type, payload, None, db, provider_id=provider_id, x_request_id=req_id_str)
@@ -205,12 +211,25 @@ def _execute_service_step(
 
         # Step B: Generate payment proof (tx_hash) & complete payment
         mock_tx_hash = "0x" + keccak(text=f"tx_{quote_id}_{time.time()}").hex()
-        proof_header = generate_payment_proof(quote_id, mock_tx_hash, settings.AGENT_WALLET_ADDRESS)
+        proof_header = generate_payment_proof(quote_id, mock_tx_hash, agent_addr)
 
-        # Mark quote paid
+        # Mark quote paid and create payment record for local fallback
+        from backend.app.models.payment import Payment
         q = db.query(Quote).filter(Quote.id == quote_id).first()
         if q:
             q.status = QuoteStatus.PAID
+            pmt = db.query(Payment).filter(Payment.quote_id == q.id).first()
+            if not pmt:
+                pmt = Payment(
+                    quote_id=q.id,
+                    request_id=q.request_id,
+                    tx_hash=mock_tx_hash,
+                    payer_address=agent_addr,
+                    amount=q.amount,
+                    verified_at=datetime.utcnow()
+                )
+                db.add(pmt)
+            db.commit()
 
         # Step C: Resubmit request with X-Payment-Proof -> get delivery & content_hash
         success_resp = handle_service_execution(service_type, payload, proof_header, db, provider_id=provider_id, x_request_id=req_id_str)
@@ -242,6 +261,7 @@ def execute_agent_run_task(agent_run: AgentRun, db: Session) -> AgentRun:
     total_actual_spent = 0.0
 
     for step in agent_run.steps:
+        logger.info("[STEP START] task_id=%s step_number=%d service=%s", agent_run.task_id, step.step_number, step.service)
         step.status = AgentRunStepStatus.EXECUTING
         db.commit()
 
@@ -295,9 +315,15 @@ def execute_agent_run_task(agent_run: AgentRun, db: Session) -> AgentRun:
                     "timestamp": datetime.utcnow().isoformat() + "Z"
                 }
             )
+            logger.info("[STEP COMPLETE] task_id=%s step_number=%d service=%s", agent_run.task_id, step.step_number, step.service)
 
         except Exception as e:
-            logger.error(f"Error executing step {step.step_number} in task {agent_run.task_id}: {e}")
+            try:
+                db.rollback()
+            except Exception:
+                pass
+            import traceback
+            logger.error(f"Error executing step {step.step_number} in task {agent_run.task_id}: {e}\n{traceback.format_exc()}")
             err_msg = str(e)
             err_type = type(e).__name__
             err_msg_lower = err_msg.lower()
@@ -365,7 +391,7 @@ def execute_agent_run_task(agent_run: AgentRun, db: Session) -> AgentRun:
             "timestamp": datetime.utcnow().isoformat() + "Z"
         }
     )
-
+    logger.info("[TASK COMPLETE] task_id=%s total_cost=%.6f ETH", agent_run.task_id, total_actual_spent)
     return agent_run
 
 
@@ -373,6 +399,7 @@ def run_background_agent_task(task_id: str):
     """
     Background worker function that opens a fresh DB session and executes an AgentRun asynchronously.
     """
+    logger.info("[TASK START] task_id=%s", task_id)
     db = SessionLocal()
     try:
         agent_run = db.query(AgentRun).filter(AgentRun.task_id == task_id).first()
@@ -386,7 +413,17 @@ def run_background_agent_task(task_id: str):
 
         execute_agent_run_task(agent_run, db)
     except Exception as e:
-        logger.error(f"Unhandled exception in background agent run execution {task_id}: {e}")
+        import traceback
+        logger.error(f"Unhandled exception in background agent run execution {task_id}: {e}\n{traceback.format_exc()}")
+        try:
+            agent_run = db.query(AgentRun).filter(AgentRun.task_id == task_id).first()
+            if agent_run and agent_run.status == AgentRunStatus.EXECUTING:
+                agent_run.status = AgentRunStatus.FAILED
+                agent_run.error_code = "UNKNOWN_ERROR"
+                agent_run.error_message = str(e)
+                db.commit()
+        except Exception as db_err:
+            logger.error(f"Failed to update task status to FAILED after background error: {db_err}")
     finally:
         db.close()
 

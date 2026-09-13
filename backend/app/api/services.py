@@ -4,7 +4,7 @@ import uuid
 import os
 import time
 from datetime import datetime, timedelta
-from typing import Optional
+from typing import Optional, Union
 from pydantic import BaseModel, SecretStr
 from eth_utils import keccak
 
@@ -49,21 +49,31 @@ def list_service_pricing():
     return get_pricing_catalog()
 
 
-def parse_payment_proof(x_payment_proof: Optional[str]) -> Optional[PaymentProof]:
+def parse_payment_proof(x_payment_proof: Optional[Union[str, dict]]) -> Optional[PaymentProof]:
     """Helper to parse payment proof from request header."""
     if not x_payment_proof:
         return None
     try:
-        data = json.loads(x_payment_proof)
+        if isinstance(x_payment_proof, dict):
+            data = x_payment_proof
+        else:
+            # Handle potential double-encoded or escaped quotes
+            raw_str = x_payment_proof.strip()
+            if (raw_str.startswith('"') and raw_str.endswith('"')) or (raw_str.startswith("'") and raw_str.endswith("'")):
+                raw_str = raw_str[1:-1]
+            data = json.loads(raw_str)
+            if isinstance(data, str):
+                data = json.loads(data)
         return PaymentProof(
-            quote_id=data.get("quote_id", ""),
-            tx_hash=data.get("tx_hash", ""),
-            payer_address=data.get("payer_address", data.get("payer", ""))
+            quote_id=str(data.get("quote_id", "")),
+            tx_hash=str(data.get("tx_hash", "")),
+            payer_address=str(data.get("payer_address", data.get("payer", "")))
         )
-    except Exception:
+    except Exception as exc:
+        logger.error(f"parse_payment_proof failed for header '{x_payment_proof}': {exc}")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid X-Payment-Proof header JSON format."
+            detail=f"Invalid X-Payment-Proof header JSON format: {exc}"
         )
 
 

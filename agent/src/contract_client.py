@@ -319,6 +319,7 @@ class ContractClient:
 
         # Build transaction
         try:
+            logger.info("[CONTRACT CALL START] request_id=%s amount_wei=%d provider=%s service=%s", req_id_str, amount_wei, checksum_provider, service)
             nonce = self.w3.eth.get_transaction_count(self.agent_address, "pending")
             gas_price = self.w3.eth.gas_price
 
@@ -361,7 +362,7 @@ class ContractClient:
             tx_hash = self.w3.eth.send_raw_transaction(signed_tx.raw_transaction)
             tx_hash_hex = HexBytes(tx_hash).to_0x_hex()
             logger.info(
-                "authorizePayment transaction broadcast: tx_hash=%s request_id=%s amount_wei=%d",
+                "[CONTRACT TX SUBMITTED] tx_hash=%s request_id=%s amount_wei=%d",
                 tx_hash_hex, req_id_str, amount_wei,
             )
         except Exception as exc:
@@ -374,6 +375,7 @@ class ContractClient:
 
         # Await transaction receipt
         try:
+            logger.info("[CONTRACT RECEIPT WAIT] tx_hash=%s request_id=%s", tx_hash_hex, req_id_str)
             receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash, timeout=120)
             if receipt.get("status") == 0:
                 # Transaction mined but reverted
@@ -383,6 +385,7 @@ class ContractClient:
                     request_id=req_id_str,
                     details={"tx_hash": tx_hash_hex, "receipt": dict(receipt)},
                 )
+            logger.info("[CONTRACT CONFIRMED] tx_hash=%s request_id=%s status=%s", tx_hash_hex, req_id_str, receipt.get("status"))
         except PaymentAuthorizationError:
             raise
         except Exception as exc:

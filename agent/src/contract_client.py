@@ -322,7 +322,7 @@ class ContractClient:
         try:
             logger.info("[CONTRACT CALL START] request_id=%s amount_wei=%d provider=%s service=%s", req_id_str, amount_wei, checksum_provider, service)
             nonce = self.w3.eth.get_transaction_count(self.agent_address, "pending")
-            gas_price = int(self.w3.eth.gas_price * 1.15)
+            gas_price = int(self.w3.eth.gas_price * 1.1)
 
             tx_data = self.contract.functions.authorizePayment(
                 req_b32,
@@ -339,11 +339,11 @@ class ContractClient:
             # Estimate gas with a safety buffer
             try:
                 estimated_gas = self.w3.eth.estimate_gas(tx_data)
-                tx_data["gas"] = int(estimated_gas * 1.2)
+                tx_data["gas"] = int(estimated_gas * 1.15)
             except Exception as est_err:
                 # If gas estimation failed due to a contract revert, map revert reason immediately
                 self._handle_revert(est_err, req_id_str)
-                tx_data["gas"] = 300000
+                tx_data["gas"] = 95000
 
         except ContractError:
             raise
@@ -429,7 +429,7 @@ class ContractClient:
 
         try:
             nonce = self.w3.eth.get_transaction_count(self.agent_address, "pending")
-            gas_price = int(self.w3.eth.gas_price * 1.15)
+            gas_price = int(self.w3.eth.gas_price * 1.1)
 
             tx_data = self.contract.functions.recordDelivery(
                 req_b32,
@@ -443,9 +443,9 @@ class ContractClient:
 
             try:
                 estimated_gas = self.w3.eth.estimate_gas(tx_data)
-                tx_data["gas"] = int(estimated_gas * 1.2)
+                tx_data["gas"] = int(estimated_gas * 1.15)
             except Exception:
-                tx_data["gas"] = 150000
+                tx_data["gas"] = 75000
 
             signed_tx = self.w3.eth.account.sign_transaction(
                 tx_data,
@@ -518,4 +518,12 @@ class ContractClient:
                 code="INSUFFICIENT_CONTRACT_BALANCE",
                 request_id=request_id,
                 details={"raw_error": msg},
+            ) from exc
+
+        if "gas required exceeds allowance" in err_lower or "insufficient funds" in err_lower:
+            raise PaymentAuthorizationError(
+                f"Agent wallet ({self.agent_address}) has insufficient ETH on Sepolia to cover transaction gas fees.",
+                code="INSUFFICIENT_AGENT_GAS_BALANCE",
+                request_id=request_id,
+                details={"raw_error": msg, "agent_address": self.agent_address},
             ) from exc

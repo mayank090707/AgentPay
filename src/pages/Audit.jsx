@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { 
   FileCheck2, 
   Search, 
-  Filter, 
   CheckCircle2, 
   ShieldAlert, 
   ShieldCheck, 
@@ -10,23 +10,20 @@ import {
   Check, 
   ArrowDown, 
   RefreshCw, 
-  ExternalLink,
-  Layers,
-  Clock,
-  KeyRound,
-  CreditCard,
-  Building,
-  FileCode
+  Bot,
+  ChevronRight,
+  Code
 } from 'lucide-react';
 import { fetchAuditLogs, fetchAuditVerification, parseAuditLogsToTransactions } from '../services/api';
 import StatusBadge from '../components/common/StatusBadge';
 
 export default function Audit() {
+  const [searchParams] = useSearchParams();
   const [transactions, setTransactions] = useState([]);
-  const [selectedRequestId, setSelectedRequestId] = useState(null);
+  const [selectedRequestId, setSelectedRequestId] = useState(searchParams.get('task_id') || null);
   const [verificationData, setVerificationData] = useState(null);
   const [isVerifying, setIsVerifying] = useState(false);
-  const [searchTerm, setSearchTerm] = useState('');
+  const [searchTerm, setSearchTerm] = useState(searchParams.get('task_id') || '');
   const [statusFilter, setStatusFilter] = useState('All');
   const [copiedField, setCopiedField] = useState(null);
   const [isBackendLive, setIsBackendLive] = useState(false);
@@ -70,7 +67,7 @@ export default function Audit() {
     loadAuditTrail();
 
     const handlePurchaseCompleted = (evt) => {
-      const newReqId = evt.detail?.request_id;
+      const newReqId = evt.detail?.request_id || evt.detail?.task_id;
       if (newReqId) {
         setSelectedRequestId(newReqId);
       }
@@ -116,6 +113,7 @@ export default function Audit() {
     return transactions.filter((tx) => {
       const matchesSearch = 
         (tx.request_id || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (tx.task_id || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
         (tx.service || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
         (tx.provider || '').toLowerCase().includes(searchTerm.toLowerCase());
 
@@ -133,7 +131,8 @@ export default function Audit() {
     if (!selectedRequestId) return transactions[0] || null;
     return (
       transactions.find(
-        (t) => (t.request_id || '').toLowerCase() === selectedRequestId.toLowerCase()
+        (t) => (t.request_id || '').toLowerCase() === selectedRequestId.toLowerCase() ||
+               (t.task_id || '').toLowerCase() === selectedRequestId.toLowerCase()
       ) || transactions[0] || null
     );
   }, [transactions, selectedRequestId]);
@@ -157,7 +156,7 @@ export default function Audit() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <div className="flex items-center space-x-2">
-            <h1 className="text-2xl font-black text-[#343434] tracking-tight">Audit Trail</h1>
+            <h1 className="text-2xl font-black text-[#343434] tracking-tight">Cryptographic Audit Trail</h1>
             {isBackendLive ? (
               <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-[#E8F5E9] text-[#3E8C5A] border border-[#C8E6C9]">
                 <span className="w-1.5 h-1.5 rounded-full bg-[#3E8C5A] animate-pulse"></span>
@@ -170,7 +169,7 @@ export default function Audit() {
             )}
           </div>
           <p className="text-xs text-gray-500 font-medium mt-0.5">
-            Verify every payment, delivery, and proof recorded by AgentPay.
+            Verify every Agent Run lifecycle, step dependency, payment, and delivery proof recorded on Sepolia.
           </p>
         </div>
 
@@ -178,7 +177,7 @@ export default function Audit() {
         <div className="bg-[#E3F2FD] border border-[#BBDEFB] px-4 py-3 rounded-2xl flex items-center space-x-3 text-xs text-[#1E3A8A] max-w-xl shadow-xs">
           <ShieldCheck className="w-5 h-5 text-[#2563EB] shrink-0" />
           <p className="leading-tight font-medium">
-            Every service purchase is linked to a request ID, payment transaction, delivery result, and content hash.
+            Every Agent service step links Task ID, Provider quote, EVM transaction hash, content hash, and service results.
           </p>
         </div>
       </div>
@@ -244,7 +243,7 @@ export default function Audit() {
               type="text"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Search Request ID, Service, Provider..."
+              placeholder="Search Task ID, Request ID, Service..."
               className="w-full pl-9 pr-3 py-2 bg-white border border-[#E9D8CC] rounded-2xl text-xs text-[#343434] focus:outline-none focus:border-[#FAD2C0] transition-all shadow-xs"
             />
           </div>
@@ -269,7 +268,7 @@ export default function Audit() {
           {/* Transaction Items List */}
           <div className="space-y-2 max-h-[600px] overflow-y-auto pr-1">
             {filteredTransactions.map((tx) => {
-              const isSelected = tx.request_id === selectedRequestId;
+              const isSelected = tx.request_id === selectedRequestId || tx.task_id === selectedRequestId;
 
               return (
                 <div
@@ -284,12 +283,18 @@ export default function Audit() {
                   <div className="space-y-1 min-w-0 flex-1 pr-2">
                     <div className="flex items-center space-x-2 min-w-0">
                       <span className="font-mono font-bold text-xs text-[#343434] truncate max-w-[120px] inline-block" title={`#${tx.request_id}`}>
-                        #{tx.request_id}
+                        #{tx.request_id.slice(0, 14)}...
                       </span>
                       <span className="text-xs font-semibold text-gray-700 truncate" title={tx.service}>
                         {tx.service}
                       </span>
                     </div>
+                    {tx.task_id && tx.task_id !== tx.request_id && (
+                      <div className="flex items-center space-x-1 text-[10px] text-[#2563EB] font-mono">
+                        <Bot className="w-2.5 h-2.5" />
+                        <span>Task #{tx.task_id.slice(0, 8)}</span>
+                      </div>
+                    )}
                     <div className="text-[11px] text-gray-500 flex items-center space-x-1.5 truncate">
                       <span className="truncate" title={tx.provider}>{tx.provider}</span>
                       <span className="shrink-0">•</span>
@@ -329,7 +334,7 @@ export default function Audit() {
                   </span>
                   <h2 className="text-base sm:text-lg font-black text-[#343434] mt-0.5 flex items-center space-x-2 min-w-0">
                     <span className="truncate max-w-[200px] sm:max-w-[320px]" title={selectedTx.request_id}>
-                      Transaction #{selectedTx.request_id}
+                      Transaction #{selectedTx.request_id.slice(0, 16)}...
                     </span>
                     <button
                       onClick={() => copyToClipboard(selectedTx.request_id, 'requestId')}
@@ -350,6 +355,16 @@ export default function Audit() {
                 </div>
               </div>
 
+              {/* Data Dependency Notice if present */}
+              {selectedTx.input_dependency && (
+                <div className="p-3 bg-[#E3F2FD] border border-[#BBDEFB] rounded-2xl flex items-center space-x-2 text-xs text-[#1E3A8A]">
+                  <ChevronRight className="w-4 h-4 text-[#2563EB] shrink-0" />
+                  <span className="font-semibold">
+                    Step Dependency: Step 1 Output (Translation) &rarr; Step 2 Input (Storage Payload)
+                  </span>
+                </div>
+              )}
+
               {/* Sequential Steps Timeline */}
               <div className="space-y-3 relative text-xs">
                 
@@ -366,7 +381,7 @@ export default function Audit() {
                     <div className="min-w-0">
                       <span className="text-gray-400 text-[10px] block font-bold uppercase tracking-wider">Request ID</span>
                       <code className="font-bold font-mono text-xs text-[#343434] block truncate max-w-full" title={selectedTx.request_id}>
-                        #{selectedTx.request_id}
+                        #{selectedTx.request_id.slice(0, 14)}...
                       </code>
                     </div>
                     <div className="min-w-0">
@@ -394,7 +409,7 @@ export default function Audit() {
                     <span className="font-extrabold text-[#343434]">{selectedTx.amountEth || `₹${selectedTx.amount.toFixed(2)}`}</span>
                   </div>
                   <p className="text-gray-600 text-[11px]">
-                    Provider {selectedTx.provider} returned HTTP 402 header & payment invoice parameters for {selectedTx.amountEth || `₹${selectedTx.amount.toFixed(2)}`}.
+                    Provider {selectedTx.provider} issued quote of {selectedTx.amountEth || `₹${selectedTx.amount.toFixed(2)}`}.
                   </p>
                 </div>
 
@@ -412,7 +427,7 @@ export default function Audit() {
                     <span className="text-gray-500 font-medium">Sepolia Contract Check</span>
                   </div>
                   <p className="text-gray-600 text-[11px]">
-                    Spending limit authorization evaluated independently on-chain by Solidity Smart Contract (Hard cap limit enforced).
+                    Spending limit authorization evaluated independently on-chain by AgentPay.sol contract logic.
                   </p>
                 </div>
 
@@ -431,7 +446,7 @@ export default function Audit() {
                       <span className="w-5 h-5 rounded-full bg-white flex items-center justify-center text-[10px]">4</span>
                       <span>{isBlocked ? 'STEP 4 — ❌ PAYMENT BLOCKED' : 'STEP 4 — PAYMENT CONFIRMED'}</span>
                     </span>
-                    <span className="font-extrabold">{isBlocked ? '₹0.00 Deducted' : `${selectedTx.amountEth || `₹${selectedTx.amount.toFixed(2)}`} Paid`}</span>
+                    <span className="font-extrabold">{isBlocked ? '0.00 ETH Deducted' : `${selectedTx.amountEth || `₹${selectedTx.amount.toFixed(2)}`} Paid`}</span>
                   </div>
                   {isBlocked ? (
                     <p className="text-xs font-semibold">
@@ -476,6 +491,14 @@ export default function Audit() {
                       ? 'Service not delivered because payment was rejected by smart contract enforcement.' 
                       : `Service payload delivered successfully by provider ${selectedTx.provider}.`}
                   </p>
+                  {selectedTx.service_result && (
+                    <div className="mt-2 p-2.5 bg-[#FFF9F5] rounded-xl border border-[#E9D8CC]">
+                      <span className="text-[10px] font-mono uppercase text-gray-400 font-bold block mb-1">Delivered Payload Output</span>
+                      <pre className="text-[11px] font-mono text-gray-800 whitespace-pre-wrap">
+                        {typeof selectedTx.service_result === 'object' ? JSON.stringify(selectedTx.service_result, null, 2) : selectedTx.service_result}
+                      </pre>
+                    </div>
+                  )}
                 </div>
 
                 <div className="flex justify-center text-gray-300">
@@ -568,16 +591,12 @@ export default function Audit() {
                     <code className="font-mono text-[11px] text-gray-700 bg-[#FDF8F5] px-2 py-1 rounded border border-[#E9D8CC] truncate block flex-1 min-w-0" title={selectedTx.content_hash}>
                       {selectedTx.content_hash}
                     </code>
-                    <button onClick={() => copyToClipboard(selectedTx.content_hash, 'contentHashCard')} className="p-1 bg-white border border-[#E9D8CC] rounded-lg text-gray-500 hover:text-gray-800 cursor-pointer shrink-0">
-                      {copiedField === 'contentHashCard' ? <Check className="w-3.5 h-3.5 text-[#2563EB]" /> : <Copy className="w-3.5 h-3.5" />}
+                    <button onClick={() => copyToClipboard(selectedTx.content_hash, 'contentHashCard')} className="p-1 bg-[#E8F5E9] border border-[#C8E6C9] rounded-lg text-[#3E8C5A] cursor-pointer shrink-0">
+                      {copiedField === 'contentHashCard' ? <Check className="w-3.5 h-3.5 text-[#3E8C5A]" /> : <Copy className="w-3.5 h-3.5" />}
                     </button>
                   </div>
                 </div>
               </div>
-
-              <p className="text-[11px] text-gray-500 font-serif italic">
-                * Note: Cryptographically calculated content hash provides proof of service delivery on Sepolia contract <code className="font-mono">0x220b...99B6</code>.
-              </p>
             </div>
           </div>
         ) : (

@@ -15,7 +15,8 @@ import {
   fetchProviders, 
   parseAuditLogsToTransactions,
   getSessionResetTime,
-  resetSession 
+  resetSession,
+  consumeRecentPurchase
 } from '../services/api';
 import { 
   mockContractSummary, 
@@ -57,7 +58,12 @@ export default function Dashboard() {
         const parsedTx = parseAuditLogsToTransactions(logsRes.logs);
         const resetTime = getSessionResetTime();
         const sessionTxs = parsedTx.filter(tx => {
-          const txTime = new Date(tx.rawLogs?.[0]?.timestamp || tx.timestamp || 0).getTime();
+          // Use the LAST (most recent) log timestamp for each transaction group.
+          // rawLogs are sorted chronologically inside parseAuditLogsToTransactions,
+          // so rawLogs[rawLogs.length - 1] is the completion event.
+          // This ensures a transaction that COMPLETED after a reset is included.
+          const lastLog = tx.rawLogs?.[tx.rawLogs.length - 1];
+          const txTime = new Date(lastLog?.timestamp || tx.rawLogs?.[0]?.timestamp || tx.timestamp || 0).getTime();
           return txTime >= resetTime;
         });
         setTransactions(sessionTxs);
@@ -96,8 +102,17 @@ export default function Dashboard() {
   useEffect(() => {
     loadBackendData();
 
+    // If user just navigated here after a purchase, do a delayed reload to
+    // ensure the backend has persisted the audit log (indexing lag safety net).
+    if (consumeRecentPurchase()) {
+      setTimeout(() => loadBackendData(), 1500);
+    }
+
     const handleUpdate = () => {
+      // Immediate reload — backend usually persists audit log synchronously
       loadBackendData();
+      // Safety-net retry after 1.5s in case of slight backend indexing lag
+      setTimeout(() => loadBackendData(), 1500);
     };
 
     window.addEventListener('agentpay:purchase_completed', handleUpdate);

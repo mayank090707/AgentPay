@@ -1,0 +1,505 @@
+import json
+import logging
+import os
+import re
+import time
+import uuid
+from datetime import datetime
+from typing import Dict, Any, Optional
+
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.orm import Session
+from eth_utils import keccak
+from pydantic import SecretStr
+
+from backend.app.database import get_db
+from backend.app.config import settings
+from backend.app.core.audit_logger import log_audit_event
+from backend.app.models.agent_run import AgentRun, AgentRunStep, AgentRunStatus, AgentRunStepStatus
+from backend.app.models.quote import Quote, QuoteStatus
+from backend.app.schemas.agent_run import AgentRunRequest, AgentRunResponse, AgentRunStepResponse
+from agent.src.planner import AgentPlanner
+
+logger = logging.getLogger(__name__)
+
+router = APIRouter(prefix="/agent", tags=["Agent Run"])
+
+
+def _get_contract_client():
+    """Helper to initialize ContractClient for read-only budget queries if env vars exist."""
+    try:
+        from agent.src.contract_client import ContractClient
+        from agent.src.config import Settings as AgentSettings
+
+        rpc_url = os.getenv("RPC_URL") or os.getenv("SEPOLIA_RPC_URL") or getattr(settings, "RPC_URL", "")
+        contract_addr = os.getenv("CONTRACT_ADDRESS") or os.getenv("VITE_CONTRACT_ADDRESS") or getattr(settings, "CONTRACT_ADDRESS", "")
+        agent_addr = os.getenv("AGENT_ADDRESS")
+        agent_pk = os.getenv("AGENT_PRIVATE_KEY")
+
+        if not rpc_url or not contract_addr or not agent_addr or not agent_pk:
+            return None
+
+        agent_settings = AgentSettings(
+            RPC_URL=rpc_url,
+            CONTRACT_ADDRESS=contract_addr,
+            CHAIN_ID=int(os.getenv("CHAIN_ID") or os.getenv("VITE_CHAIN_ID") or 11155111),
+            AGENT_ADDRESS=agent_addr,
+            AGENT_PRIVATE_KEY=SecretStr(agent_pk),
+            PROVIDER_BASE_URL=os.getenv("PROVIDER_BASE_URL") or "http://localhost:8000",
+        )
+        return ContractClient(settings=agent_settings)
+    except Exception as e:
+        logger.warning(f"Could not initialize ContractClient for read-only budget check: {e}")
+        return None
+
+
+def get_remaining_contract_budget(db: Session) -> float:
+    """
+    Safely reads the remaining contract budget from Sepolia contract or DB fallback.
+    Does NOT execute any blockchain transaction.
+    """
+    cc = _get_contract_client()
+    if cc:
+        try:
+            status_dict = cc.get_budget_status()
+            remaining_wei = float(status_dict["remaining"])
+            return max(0.0, remaining_wei / 1e18)
+        except Exception as e:
+            logger.warning(f"Contract get_budget_status query failed: {e}")
+
+    # Fallback to hard cap minus paid DB quotes
+    hard_cap = getattr(settings, "HARD_CAP_ETH", 0.05)
+    paid_quotes = db.query(Quote).filter(Quote.status == QuoteStatus.PAID).all()
+    spent = sum(q.amount for q in paid_quotes)
+    return max(0.0, hard_cap - spent)
+
+
+def _extract_translation_text(prompt: str) -> str:
+    """Helper to extract quote text or main text to translate from user prompt."""
+    match = re.search(r"['\"]([^'\"]+)['\"]", prompt)
+    if match:
+        return match.group(1)
+    
+    clean = re.sub(r"(?i)^(translate|please translate)\s+", "", prompt.strip())
+    clean = re.sub(r"(?i)\s+and\s+store.*$", "", clean)
+    clean = re.sub(r"(?i)\s+into\s+[a-z]+$", "", clean)
+    clean = re.sub(r"(?i)\s+to\s+[a-z]+$", "", clean)
+    return clean.strip() or "Hello World"
+
+
+def _execute_service_step(
+    step: AgentRunStep,
+    payload: Dict[str, Any],
+    db: Session
+) -> Dict[str, Any]:
+    """
+    Executes a single service step using the HTTP 402 -> Sepolia Smart Contract -> Delivery pipeline.
+    Reuses existing Orchestrator / handle_service_execution infrastructure.
+    """
+    service_type = step.service.lower()
+    provider_id = step.provider_id or "alpha"
+
+    # Check if full on-chain Orchestrator env is available
+    rpc_url = os.getenv("RPC_URL") or os.getenv("SEPOLIA_RPC_URL") or settings.RPC_URL
+    contract_addr = os.getenv("CONTRACT_ADDRESS") or os.getenv("VITE_CONTRACT_ADDRESS") or settings.CONTRACT_ADDRESS
+    agent_addr = os.getenv("AGENT_ADDRESS")
+    agent_pk = os.getenv("AGENT_PRIVATE_KEY")
+
+    req_id_str = "0x" + keccak(text=f"step_{step.id}_{time.time()}").hex()
+
+    if rpc_url and contract_addr and agent_addr and agent_pk:
+        from agent.src.orchestrator import Orchestrator
+        from agent.src.models import ServiceRequest, RequestId
+        from agent.src.config import Settings as AgentSettings
+
+        agent_settings = AgentSettings(
+            RPC_URL=rpc_url,
+            CONTRACT_ADDRESS=contract_addr,
+            CHAIN_ID=int(os.getenv("CHAIN_ID") or os.getenv("VITE_CHAIN_ID") or 11155111),
+            AGENT_ADDRESS=agent_addr,
+            AGENT_PRIVATE_KEY=SecretStr(agent_pk),
+            PROVIDER_BASE_URL=os.getenv("PROVIDER_BASE_URL") or "http://localhost:8000",
+        )
+        orchestrator = Orchestrator(settings=agent_settings)
+        service_req = ServiceRequest(
+            service_type=service_type,
+            provider_id=provider_id,
+            payload=payload,
+            request_id=RequestId(req_id_str)
+        )
+        try:
+            result_obj = orchestrator.run(service_req)
+            return {
+                "request_id": req_id_str,
+                "transaction_hash": result_obj.transaction_hash,
+                "content_hash": result_obj.content_hash,
+                "data": result_obj.result_data,
+                "amount": step.quote_eth,
+            }
+        except Exception as e:
+            logger.error(f"Orchestrator execution error for step {step.step_number}: {e}")
+            raise e
+
+    # Local backend execution fallback (HTTP 402 + DB logging)
+    from backend.app.api.services import handle_service_execution
+    from backend.app.core.receipt_generator import generate_payment_proof
+
+    # Step A: Initiate request without proof -> get 402 Payment Required quote
+    resp = handle_service_execution(service_type, payload, None, db, provider_id=provider_id, x_request_id=req_id_str)
+    if isinstance(resp, JSONResponse) and resp.status_code == 402:
+        body = json.loads(resp.body.decode("utf-8"))
+        quote_id = body["quote_id"]
+        quote_amount = body["amount"]
+
+        # Step B: Generate payment proof (tx_hash) & complete payment
+        mock_tx_hash = "0x" + keccak(text=f"tx_{quote_id}_{time.time()}").hex()
+        proof_header = generate_payment_proof(quote_id, mock_tx_hash, settings.AGENT_WALLET_ADDRESS)
+
+        # Mark quote paid
+        q = db.query(Quote).filter(Quote.id == quote_id).first()
+        if q:
+            q.status = QuoteStatus.PAID
+
+        # Step C: Resubmit request with X-Payment-Proof -> get delivery & content_hash
+        success_resp = handle_service_execution(service_type, payload, proof_header, db, provider_id=provider_id, x_request_id=req_id_str)
+        if hasattr(success_resp, "data"):
+            return {
+                "request_id": req_id_str,
+                "transaction_hash": mock_tx_hash,
+                "content_hash": success_resp.content_hash,
+                "data": success_resp.data,
+                "amount": quote_amount,
+            }
+
+    raise RuntimeError(f"Service execution failed for step {step.step_number} ({service_type})")
+
+
+def execute_agent_run_task(agent_run: AgentRun, db: Session) -> AgentRun:
+    """
+    Executes all planned steps in an AgentRun sequentially, chaining real output data from
+    step N-1 into step N. Reuses existing HTTP 402 and smart contract payment infrastructure.
+    """
+    if agent_run.status == AgentRunStatus.BLOCKED:
+        return agent_run
+
+    agent_run.status = AgentRunStatus.EXECUTING
+    agent_run.started_at = datetime.utcnow()
+    db.commit()
+
+    accumulated_output = None
+    total_actual_spent = 0.0
+
+    for step in agent_run.steps:
+        step.status = AgentRunStepStatus.EXECUTING
+        db.commit()
+
+        # Build payload with real data chaining
+        service_type = step.service.lower()
+        payload = {"provider_id": step.provider_id}
+
+        if service_type == "translation":
+            input_text = accumulated_output if (step.input_dependency and accumulated_output) else _extract_translation_text(agent_run.user_prompt)
+            payload.update({"text": input_text, "source_lang": "en", "target_lang": "hi"})
+        elif service_type == "storage":
+            val_to_store = accumulated_output if (step.input_dependency and accumulated_output) else f"Stored output for '{agent_run.user_prompt}'"
+            payload.update({"key": "translated_document", "value": val_to_store, "ttl_seconds": 3600})
+        elif service_type == "compute":
+            payload.update({"operation": "matrix_multiply", "params": {"data": accumulated_output or "dataset_snapshot", "matrix_size": 100}})
+
+        try:
+            exec_res = _execute_service_step(step, payload, db)
+            
+            output_data = exec_res.get("data") or {}
+            step.transaction_hash = exec_res.get("transaction_hash")
+            step.content_hash = exec_res.get("content_hash")
+            step.result = json.dumps(output_data)
+            step.status = AgentRunStepStatus.FULFILLED
+            step.completed_at = datetime.utcnow()
+
+            spent = exec_res.get("amount", step.quote_eth)
+            total_actual_spent += spent
+
+            # Extract output for subsequent step chaining
+            if service_type == "translation":
+                accumulated_output = output_data.get("translated_text") or output_data.get("text") or json.dumps(output_data)
+            elif service_type == "compute":
+                accumulated_output = json.dumps(output_data.get("result") or output_data)
+            elif service_type == "storage":
+                accumulated_output = output_data.get("value") or output_data.get("key") or json.dumps(output_data)
+
+            log_audit_event(
+                db=db,
+                request_id=agent_run.task_id,
+                event_type="AGENT_STEP_FULFILLED",
+                details={
+                    "task_id": agent_run.task_id,
+                    "step_number": step.step_number,
+                    "service": step.service,
+                    "provider_id": step.provider_id,
+                    "transaction_hash": step.transaction_hash,
+                    "content_hash": step.content_hash,
+                    "input_dependency": step.input_dependency,
+                    "output": output_data,
+                    "timestamp": datetime.utcnow().isoformat() + "Z"
+                }
+            )
+
+        except Exception as e:
+            logger.error(f"Error executing step {step.step_number} in task {agent_run.task_id}: {e}")
+            err_msg = str(e)
+            step.status = AgentRunStepStatus.BLOCKED
+            step.error_code = "EXECUTION_FAILED"
+            step.error_message = err_msg
+
+            agent_run.status = AgentRunStatus.BLOCKED
+            agent_run.error_code = "BUDGET_EXCEEDED" if "budget" in err_msg.lower() else "STEP_EXECUTION_FAILED"
+            agent_run.error_message = err_msg
+            db.commit()
+
+            log_audit_event(
+                db=db,
+                request_id=agent_run.task_id,
+                event_type="AGENT_RUN_BLOCKED",
+                details={
+                    "task_id": agent_run.task_id,
+                    "failed_step": step.step_number,
+                    "service": step.service,
+                    "error": err_msg,
+                    "timestamp": datetime.utcnow().isoformat() + "Z"
+                }
+            )
+            return agent_run
+
+    agent_run.status = AgentRunStatus.COMPLETED
+    agent_run.completed_at = datetime.utcnow()
+    agent_run.total_actual_cost_eth = total_actual_spent
+    db.commit()
+
+    log_audit_event(
+        db=db,
+        request_id=agent_run.task_id,
+        event_type="AGENT_RUN_COMPLETED",
+        details={
+            "task_id": agent_run.task_id,
+            "user_prompt": agent_run.user_prompt,
+            "total_actual_cost_eth": f"{total_actual_spent:.6f} ETH",
+            "step_count": len(agent_run.steps),
+            "timestamp": datetime.utcnow().isoformat() + "Z"
+        }
+    )
+
+    return agent_run
+
+
+@router.post("/run", response_model=AgentRunResponse)
+def create_agent_run(req: AgentRunRequest, db: Session = Depends(get_db)):
+    """
+    Receives a natural-language goal, plans required multi-service execution steps,
+    evaluates planned costs against current contract budget, persists the AgentRun,
+    and optionally executes the run via HTTP 402 & Sepolia Smart Contract.
+    """
+    if not req.prompt or not req.prompt.strip():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="User prompt cannot be empty."
+        )
+
+    task_id = str(uuid.uuid4())
+    planner = AgentPlanner()
+    plan = planner.create_plan(req.prompt)
+
+    remaining_budget_eth = get_remaining_contract_budget(db)
+    if req.max_budget_eth is not None and req.max_budget_eth > 0:
+        remaining_budget_eth = min(remaining_budget_eth, req.max_budget_eth)
+
+    # Check for unsupported goal
+    if len(plan.steps) == 0:
+        err_code = "UNSUPPORTED_GOAL"
+        err_msg = f"Could not detect supported service capabilities ('translation', 'storage', 'compute') from prompt: '{req.prompt}'"
+        run_status = AgentRunStatus.FAILED
+
+        now_dt = datetime.utcnow()
+        agent_run = AgentRun(
+            id=str(uuid.uuid4()),
+            task_id=task_id,
+            user_prompt=req.prompt,
+            status=run_status,
+            total_planned_cost_eth=0.0,
+            budget_remaining_eth=remaining_budget_eth,
+            error_code=err_code,
+            error_message=err_msg,
+            created_at=now_dt,
+        )
+        db.add(agent_run)
+        db.commit()
+        db.refresh(agent_run)
+
+        log_audit_event(
+            db=db,
+            request_id=task_id,
+            event_type="AGENT_RUN_UNSUPPORTED",
+            details={
+                "task_id": task_id,
+                "user_prompt": req.prompt,
+                "error_code": err_code,
+                "error_message": err_msg,
+                "timestamp": now_dt.isoformat() + "Z",
+            }
+        )
+
+        return AgentRunResponse(
+            task_id=agent_run.task_id,
+            user_prompt=agent_run.user_prompt,
+            status=agent_run.status.value,
+            plan=[],
+            total_planned_cost_eth=0.0,
+            budget_remaining_eth=remaining_budget_eth,
+            error_code=err_code,
+            error_message=err_msg,
+            created_at=agent_run.created_at.isoformat() + "Z",
+        )
+
+    # Evaluate plan against remaining budget
+    plan = planner.evaluate_budget(plan, remaining_budget_eth)
+
+    if plan.budget_status == "WITHIN_BUDGET":
+        run_status = AgentRunStatus.PLANNED
+        err_code = None
+        err_msg = None
+    else:
+        run_status = AgentRunStatus.BLOCKED
+        err_code = "BUDGET_EXCEEDED"
+        err_msg = (
+            f"PRE_EXECUTION_BUDGET_BLOCK: Total planned cost ({plan.total_planned_cost_eth:.6f} ETH) "
+            f"exceeds remaining contract budget ({remaining_budget_eth:.6f} ETH)."
+        )
+
+    now_dt = datetime.utcnow()
+    agent_run = AgentRun(
+        id=str(uuid.uuid4()),
+        task_id=task_id,
+        user_prompt=req.prompt,
+        status=run_status,
+        total_planned_cost_eth=plan.total_planned_cost_eth,
+        budget_remaining_eth=remaining_budget_eth,
+        error_code=err_code,
+        error_message=err_msg,
+        created_at=now_dt,
+    )
+    db.add(agent_run)
+
+    # Persist steps
+    for step in plan.steps:
+        step_model = AgentRunStep(
+            id=str(uuid.uuid4()),
+            agent_run_id=agent_run.id,
+            task_id=task_id,
+            step_number=step.step_number,
+            service=step.service,
+            reason=step.reason,
+            input_dependency=step.input_dependency,
+            provider_id=step.provider_id,
+            quote_eth=step.quote_eth,
+            status=AgentRunStepStatus.PLANNED,
+            created_at=now_dt,
+        )
+        db.add(step_model)
+
+    db.commit()
+    db.refresh(agent_run)
+
+    log_audit_event(
+        db=db,
+        request_id=task_id,
+        event_type="AGENT_RUN_PLANNED" if run_status == AgentRunStatus.PLANNED else "AGENT_RUN_BLOCKED",
+        details={
+            "task_id": task_id,
+            "user_prompt": req.prompt,
+            "status": run_status.value,
+            "total_planned_cost_eth": f"{plan.total_planned_cost_eth:.6f} ETH",
+            "budget_remaining_eth": f"{remaining_budget_eth:.6f} ETH",
+            "step_count": len(plan.steps),
+            "error_code": err_code,
+            "error_message": err_msg,
+            "timestamp": now_dt.isoformat() + "Z",
+        }
+    )
+
+    # Auto-execute if requested and within budget
+    if req.auto_execute and run_status == AgentRunStatus.PLANNED:
+        agent_run = execute_agent_run_task(agent_run, db)
+
+    return _build_agent_run_response(agent_run)
+
+
+@router.post("/run/execute/{task_id}", response_model=AgentRunResponse)
+def execute_agent_run(task_id: str, db: Session = Depends(get_db)):
+    """Triggers real multi-step execution of a planned AgentRun by task_id."""
+    agent_run = db.query(AgentRun).filter(AgentRun.task_id == task_id).first()
+    if not agent_run:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Agent run with task_id '{task_id}' not found."
+        )
+
+    if agent_run.status == AgentRunStatus.BLOCKED:
+        return _build_agent_run_response(agent_run)
+
+    agent_run = execute_agent_run_task(agent_run, db)
+    return _build_agent_run_response(agent_run)
+
+
+@router.get("/run/{task_id}", response_model=AgentRunResponse)
+def get_agent_run(task_id: str, db: Session = Depends(get_db)):
+    """Fetches a persisted AgentRun by task_id."""
+    agent_run = db.query(AgentRun).filter(AgentRun.task_id == task_id).first()
+    if not agent_run:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Agent run with task_id '{task_id}' not found."
+        )
+
+    return _build_agent_run_response(agent_run)
+
+
+def _build_agent_run_response(agent_run: AgentRun) -> AgentRunResponse:
+    """Helper to convert AgentRun SQLAlchemy model to Pydantic AgentRunResponse."""
+    step_responses = []
+    for s in agent_run.steps:
+        parsed_res = None
+        if s.result:
+            try:
+                parsed_res = json.loads(s.result)
+            except Exception:
+                parsed_res = s.result
+
+        step_responses.append(
+            AgentRunStepResponse(
+                step=s.step_number,
+                service=s.service,
+                reason=s.reason,
+                input_dependency=s.input_dependency,
+                provider_id=s.provider_id,
+                quote_eth=s.quote_eth,
+                status=s.status.value if hasattr(s.status, "value") else str(s.status),
+                transaction_hash=s.transaction_hash,
+                content_hash=s.content_hash,
+                result=parsed_res,
+                error_message=s.error_message,
+            )
+        )
+
+    return AgentRunResponse(
+        task_id=agent_run.task_id,
+        user_prompt=agent_run.user_prompt,
+        status=agent_run.status.value if hasattr(agent_run.status, "value") else str(agent_run.status),
+        plan=step_responses,
+        total_planned_cost_eth=agent_run.total_planned_cost_eth,
+        total_actual_cost_eth=agent_run.total_actual_cost_eth,
+        budget_remaining_eth=agent_run.budget_remaining_eth,
+        error_code=agent_run.error_code,
+        error_message=agent_run.error_message,
+        created_at=agent_run.created_at.isoformat() + "Z",
+        started_at=agent_run.started_at.isoformat() + "Z" if agent_run.started_at else None,
+        completed_at=agent_run.completed_at.isoformat() + "Z" if agent_run.completed_at else None,
+    )

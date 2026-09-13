@@ -1,56 +1,29 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { 
   Users, 
   Languages, 
   Database, 
   Cpu, 
   Star, 
-  Zap, 
   ShieldCheck, 
-  Info, 
   X, 
-  ExternalLink,
-  ArrowUpDown,
-  CheckCircle2,
-  Clock,
-  Send,
-  RefreshCw,
-  ShoppingCart,
-  Check,
-  AlertCircle,
-  FileCheck2,
-  KeyRound,
-  Bot
+  ArrowUpDown, 
+  RefreshCw, 
+  Bot,
+  Info
 } from 'lucide-react';
-import { fetchProviders, purchaseService } from '../services/api';
+import { fetchProviders } from '../services/api';
 import { mockProviders } from '../data/mockData';
 
 export default function Providers() {
-  const navigate = useNavigate();
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [sortBy, setSortBy] = useState('price-low');
   const [selectedProvider, setSelectedProvider] = useState(null);
-  const [demoNotice, setDemoNotice] = useState(null);
 
   // Live Backend State
   const [providers, setProviders] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isBackendLive, setIsBackendLive] = useState(false);
-
-  // Buy / Request Service Execution Pipeline Overlay Modal State
-  const [purchaseModal, setPurchaseModal] = useState({
-    isOpen: false,
-    provider: null,
-    step: 1, // 1: Contact Backend, 2: 402 Received, 3: AI Agent Check, 4: Smart Contract Auth, 5: X-Payment-Proof, 6: Service Delivery, 7: Audit Logged
-    status: 'idle', // 'idle' | 'running' | 'completed' | 'error'
-    requestId: null,
-    quote: null,
-    paymentTx: null,
-    contentHash: null,
-    receipt: null,
-    error: null,
-  });
 
   useEffect(() => {
     let isMounted = true;
@@ -157,114 +130,17 @@ export default function Providers() {
     }
   };
 
-  /**
-   * Triggers the real HTTP 402 → Smart Contract → Delivery execution flow.
-   */
-  const handleBuyService = async (provider) => {
-    const serviceType = (provider.service || 'translation').toLowerCase();
-    const providerId = provider.provider_id || (provider.name?.toLowerCase().includes('beta') ? 'beta' : 'alpha');
-
-    setPurchaseModal({
-      isOpen: true,
-      provider,
-      step: 1,
-      status: 'running',
-      requestId: null,
-      quote: null,
-      paymentTx: null,
-      contentHash: null,
-      receipt: null,
-      error: null,
-    });
-
-    let stepTimer1, stepTimer2, stepTimer3;
-
-    try {
-      let payload = { provider_id: providerId };
-      if (serviceType === 'translation') {
-        payload = { text: "Autonomous Agent AI Service Request", source_lang: "en", target_lang: "es", provider_id: providerId };
-      } else if (serviceType === 'compute') {
-        payload = { operation: "matrix_multiply", params: { matrix_size: 100 }, provider_id: providerId };
-      } else {
-        payload = { key: "dataset_snapshot", value: "Decentralized AI model weights proof", provider_id: providerId };
-      }
-
-      setPurchaseModal(prev => ({ ...prev, step: 2 }));
-
-      // Advance UI steps smoothly during active backend execution
-      stepTimer1 = setTimeout(() => {
-        setPurchaseModal(prev => prev.status === 'running' ? { ...prev, step: 3 } : prev);
-      }, 1200);
-
-      stepTimer2 = setTimeout(() => {
-        setPurchaseModal(prev => prev.status === 'running' ? { ...prev, step: 4 } : prev);
-      }, 3500);
-
-      stepTimer3 = setTimeout(() => {
-        setPurchaseModal(prev => prev.status === 'running' ? { ...prev, step: 5 } : prev);
-      }, 7500);
-
-      // Call real backend purchase endpoint (/services/purchase) which runs Orchestrator & Sepolia Smart Contract
-      const res = await purchaseService({
-        service_type: serviceType,
-        provider_id: providerId,
-        payload,
-      });
-
-      clearTimeout(stepTimer1);
-      clearTimeout(stepTimer2);
-      clearTimeout(stepTimer3);
-
-      if (res && res.status === 'success') {
-        setPurchaseModal(prev => ({
-          ...prev,
-          step: 5,
-          requestId: res.request_id,
-          paymentTx: res.transaction_hash,
-          contentHash: res.content_hash,
-          receipt: res.receipt,
-          quote: {
-            quoteId: res.receipt?.quote_id || res.request_id,
-            amount: res.amount,
-            address: provider.endpoint || 'AgentPay Smart Contract',
-          },
-        }));
-
-        await new Promise(r => setTimeout(r, 400));
-        setPurchaseModal(prev => ({ ...prev, step: 6 }));
-
-        await new Promise(r => setTimeout(r, 400));
-        setPurchaseModal(prev => ({ ...prev, step: 7, status: 'completed' }));
-
-        // Dispatch purchase completion event so Payments and Audit pages refresh live data
-        window.dispatchEvent(new CustomEvent('agentpay:purchase_completed', { detail: res }));
-      } else {
-        throw new Error(res?.detail || res?.message || 'Purchase execution failed');
-      }
-    } catch (err) {
-      clearTimeout(stepTimer1);
-      clearTimeout(stepTimer2);
-      clearTimeout(stepTimer3);
-      setPurchaseModal(prev => ({
-        ...prev,
-        status: 'error',
-        error: err.message || 'Service request failed',
-      }));
-      window.dispatchEvent(new CustomEvent('agentpay:purchase_completed', { detail: { error: err.message } }));
-    }
-  };
-
   return (
     <div className="space-y-6 animate-fadeIn select-none">
-      {/* 1. Page Header & Explanatory Info Card */}
+      {/* 1. Page Header & Explanatory Banner */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <div className="flex items-center space-x-2">
-            <h1 className="text-2xl font-black text-[#343434] tracking-tight">Service Providers</h1>
+            <h1 className="text-2xl font-black text-[#343434] tracking-tight">Provider Directory</h1>
             {isBackendLive ? (
               <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-[#E8F5E9] text-[#3E8C5A] border border-[#C8E6C9]">
                 <span className="w-1.5 h-1.5 rounded-full bg-[#3E8C5A] animate-pulse"></span>
-                <span>Live Provider Catalog</span>
+                <span>Live Provider Marketplace</span>
               </span>
             ) : (
               <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-[#FFF3E0] text-[#E65100] border border-[#FFE0B2]">
@@ -273,28 +149,18 @@ export default function Providers() {
             )}
           </div>
           <p className="text-xs text-gray-500 font-medium mt-0.5">
-            Choose from registered independent providers based on price, quality, and response speed.
+            Independent service providers registered on the AgentPay network.
           </p>
         </div>
 
         {/* Informational Banner */}
-        <div className="bg-[#E8F5E9] border border-[#C8E6C9] px-4 py-3 rounded-2xl flex items-center space-x-3 text-xs text-[#2E7D32] max-w-lg shadow-xs">
-          <ShieldCheck className="w-5 h-5 text-[#3E8C5A] shrink-0" />
-          <p className="leading-tight">
-            The AI agent autonomously selects & purchases services from independent providers via HTTP 402 payment headers.
+        <div className="bg-[#E8F5E9] border border-[#C8E6C9] px-4 py-3 rounded-2xl flex items-center space-x-3 text-xs text-[#2E7D32] max-w-xl shadow-xs">
+          <Bot className="w-5 h-5 text-[#3E8C5A] shrink-0" />
+          <p className="leading-tight font-medium">
+            Providers are automatically discovered and purchased by the AI Agent when required by a task. Manual purchasing is disabled to enforce autonomous payment logic.
           </p>
         </div>
       </div>
-
-      {/* Demo Notice Banner */}
-      {demoNotice && (
-        <div className="p-3 bg-[#E3F2FD] border border-[#BBDEFB] text-[#1E3A8A] rounded-2xl text-xs font-bold flex items-center justify-between animate-fadeIn">
-          <span>💡 {demoNotice}</span>
-          <button onClick={() => setDemoNotice(null)} className="text-gray-400 hover:text-gray-600">
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-      )}
 
       {/* 2. Catalog Control Bar (Filters & Sorting) */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-[#FFF9F5] p-3 rounded-3xl border border-[#E9D8CC] shadow-card">
@@ -369,7 +235,7 @@ export default function Providers() {
                     {getStatusBadge(provider.status)}
                   </div>
 
-                  {/* Optional Signal Badges */}
+                  {/* Signal Badges */}
                   {provider.badge && (
                     <div className="mt-3">
                       <span className={`inline-block px-2.5 py-0.5 rounded-full text-[9px] font-extrabold tracking-wide uppercase ${
@@ -417,23 +283,17 @@ export default function Providers() {
 
                 {/* Card Footer Actions */}
                 <div className="pt-2 flex items-center justify-between gap-2 text-xs">
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleBuyService(provider);
-                    }}
-                    className="flex-1 py-2 bg-[#FAD2C0] hover:bg-[#f8bd9e] text-[#343434] font-extrabold text-xs rounded-xl transition-all shadow-xs flex items-center justify-center space-x-1.5 cursor-pointer"
-                  >
-                    <ShoppingCart className="w-3.5 h-3.5" />
-                    <span>Buy / Request Service</span>
-                  </button>
+                  <div className="flex-1 py-2 px-3 bg-gray-100 border border-gray-200 text-gray-500 font-bold text-[11px] rounded-xl flex items-center justify-center space-x-1.5">
+                    <ShieldCheck className="w-3.5 h-3.5 text-[#3E8C5A]" />
+                    <span>Agent Compatible</span>
+                  </div>
 
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
                       setSelectedProvider(provider);
                     }}
-                    className="px-3 py-2 bg-white hover:bg-gray-50 border border-[#E9D8CC] text-gray-600 font-bold text-xs rounded-xl transition-all shadow-xs cursor-pointer shrink-0"
+                    className="px-3 py-2 bg-white hover:bg-gray-50 border border-[#E9D8CC] text-gray-700 font-bold text-xs rounded-xl transition-all shadow-xs cursor-pointer shrink-0"
                   >
                     View Details
                   </button>
@@ -537,187 +397,16 @@ export default function Providers() {
 
             {/* Modal Footer Controls */}
             <div className="px-6 py-4 bg-[#FDF8F5] border-t border-[#E9D8CC] flex items-center justify-between">
+              <span className="text-[11px] text-gray-500 font-medium">
+                Auto-purchased via AI Agent tasks
+              </span>
+
               <button
                 onClick={() => setSelectedProvider(null)}
-                className="px-4 py-2 text-xs font-bold text-gray-600 hover:text-gray-900 transition-colors cursor-pointer"
+                className="px-5 py-2.5 bg-[#FAD2C0] hover:bg-[#f8bd9e] text-[#343434] text-xs font-black rounded-xl transition-all shadow-xs cursor-pointer"
               >
                 Close
               </button>
-
-              <button
-                onClick={() => {
-                  const prov = selectedProvider;
-                  setSelectedProvider(null);
-                  handleBuyService(prov);
-                }}
-                className="px-5 py-2.5 bg-[#FAD2C0] hover:bg-[#f8bd9e] text-[#343434] text-xs font-black rounded-xl transition-all shadow-xs flex items-center space-x-2 cursor-pointer"
-              >
-                <ShoppingCart className="w-4 h-4" />
-                <span>Buy / Request Service</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* 5. LIVE BUY / REQUEST SERVICE EXECUTION OVERLAY MODAL */}
-      {purchaseModal.isOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-fadeIn select-none">
-          <div className="bg-[#FFF9F5] border border-[#E9D8CC] rounded-3xl w-full max-w-lg max-h-[85vh] shadow-2xl flex flex-col overflow-hidden text-[#343434]">
-            
-            {/* Header */}
-            <div className="px-5 py-3.5 border-b border-[#E9D8CC] flex items-center justify-between bg-white shrink-0">
-              <div className="flex items-center space-x-3">
-                <div className="w-9 h-9 rounded-2xl bg-[#E3F2FD] border border-[#BBDEFB] flex items-center justify-center text-[#2563EB]">
-                  <Bot className="w-4 h-4" />
-                </div>
-                <div>
-                  <h3 className="text-sm sm:text-base font-black text-[#343434]">AgentPay Payment Flow Pipeline</h3>
-                  <span className="text-[10px] font-bold text-[#3E8C5A] bg-[#E8F5E9] px-2 py-0.5 rounded-full border border-[#C8E6C9]">
-                    HTTP 402 → Smart Contract → Delivery
-                  </span>
-                </div>
-              </div>
-              {purchaseModal.status === 'completed' || purchaseModal.status === 'error' ? (
-                <button
-                  onClick={() => setPurchaseModal(prev => ({ ...prev, isOpen: false }))}
-                  className="p-1 rounded-xl text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              ) : null}
-            </div>
-
-            {/* Content Body */}
-            <div className="p-4 sm:p-5 space-y-4 flex-1 overflow-y-auto">
-              
-              {/* Selected Target Summary */}
-              <div className="bg-white p-3.5 rounded-2xl border border-[#E9D8CC] flex items-center justify-between text-xs">
-                <div>
-                  <span className="text-gray-400 text-[10px] font-bold block uppercase tracking-wider">Target Provider</span>
-                  <span className="font-black text-xs sm:text-sm text-[#343434]">{purchaseModal.provider?.name} ({purchaseModal.provider?.service})</span>
-                </div>
-                <div className="text-right">
-                  <span className="text-gray-400 text-[10px] font-bold block uppercase tracking-wider">Service Rate</span>
-                  <span className="font-black text-xs sm:text-sm text-[#2563EB]">{purchaseModal.provider?.price} ETH</span>
-                </div>
-              </div>
-
-              {/* Execution Steps Timeline */}
-              <div className="space-y-2.5 bg-white p-4 rounded-2xl border border-[#E9D8CC]">
-                <h4 className="text-[10px] font-mono uppercase font-bold text-gray-400 tracking-wider mb-2">
-                  Live Execution Steps
-                </h4>
-
-                {[
-                  { step: 1, title: 'Providers', desc: `Selecting provider ${purchaseModal.provider?.name}` },
-                  { step: 2, title: 'Backend (HTTP 402 Required)', desc: purchaseModal.quote ? `Quote Created: ${purchaseModal.quote.amount} ETH (ID: ${purchaseModal.quote.quoteId?.slice(0, 12)}...)` : 'Requesting quote from backend endpoint...' },
-                  { step: 3, title: 'Embedded AI Agent', desc: 'Validating request ID & Sepolia spending cap limits' },
-                  { step: 4, title: 'Smart Contract Authorization', desc: purchaseModal.paymentTx ? `Sepolia Payment Minted (Tx: ${purchaseModal.paymentTx.slice(0, 14)}...)` : 'Authorizing payment on-chain...' },
-                  { step: 5, title: 'Real Sepolia Payment Proof', desc: 'Submitting signed X-Payment-Proof header' },
-                  { step: 6, title: 'Provider Service Delivery', desc: purchaseModal.contentHash ? `Payload Delivered & ContentHash Verified (${purchaseModal.contentHash.slice(0, 14)}...)` : 'Awaiting service delivery payload...' },
-                  { step: 7, title: 'Transaction in Payments + Audit', desc: 'Transaction successfully persisted in live audit logs' },
-                ].map((item) => {
-                  const isDone = purchaseModal.step > item.step || purchaseModal.status === 'completed';
-                  const isCurrent = purchaseModal.step === item.step && purchaseModal.status === 'running';
-
-                  return (
-                    <div key={item.step} className="flex items-start space-x-2.5 text-xs">
-                      <div className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 font-bold text-[11px] transition-all ${
-                        isDone 
-                          ? 'bg-[#E8F5E9] text-[#3E8C5A] border border-[#C8E6C9]' 
-                          : isCurrent 
-                          ? 'bg-[#E3F2FD] text-[#2563EB] border border-[#BBDEFB] animate-pulse' 
-                          : 'bg-gray-100 text-gray-400 border border-gray-200'
-                      }`}>
-                        {isDone ? <Check className="w-3 h-3" /> : item.step}
-                      </div>
-
-                      <div className="flex-1">
-                        <div className="flex items-center justify-between">
-                          <span className={`font-extrabold text-[11px] sm:text-xs ${isCurrent ? 'text-[#2563EB]' : isDone ? 'text-[#343434]' : 'text-gray-400'}`}>
-                            {item.title}
-                          </span>
-                          {isCurrent && (
-                            <span className="text-[9px] font-bold text-[#2563EB] bg-[#E3F2FD] px-1.5 py-0.5 rounded-full flex items-center space-x-1">
-                              <RefreshCw className="w-2.5 h-2.5 animate-spin" />
-                              <span>Processing</span>
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-[10px] text-gray-500 mt-0.5">{item.desc}</p>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-
-              {/* Status Notice / Summary Receipt */}
-              {purchaseModal.status === 'completed' && (
-                <div className="bg-[#E8F5E9] border border-[#C8E6C9] p-3.5 rounded-2xl space-y-2.5 animate-fadeIn">
-                  <div className="flex items-center space-x-2 text-[#2E7D32]">
-                    <CheckCircle2 className="w-4 h-4 text-[#3E8C5A]" />
-                    <span className="font-extrabold text-xs sm:text-sm">Flow Execution Successful!</span>
-                  </div>
-                  <p className="text-[11px] text-[#2E7D32] leading-relaxed">
-                    The payment was verified on-chain, service delivered by {purchaseModal.provider?.name}, and logged in audit history.
-                  </p>
-
-                  <div className="pt-1 flex items-center space-x-2.5">
-                    <button
-                      onClick={() => {
-                        setPurchaseModal(prev => ({ ...prev, isOpen: false }));
-                        navigate('/payments');
-                      }}
-                      className="px-3.5 py-1.5 bg-[#2563EB] hover:bg-[#1d4ed8] text-white text-xs font-bold rounded-xl transition-all shadow-xs flex items-center space-x-1.5 cursor-pointer"
-                    >
-                      <ShoppingCart className="w-3.5 h-3.5" />
-                      <span>View in Payments</span>
-                    </button>
-
-                    <button
-                      onClick={() => {
-                        setPurchaseModal(prev => ({ ...prev, isOpen: false }));
-                        navigate('/audit');
-                      }}
-                      className="px-3.5 py-1.5 bg-white hover:bg-gray-50 border border-[#C8E6C9] text-[#2E7D32] text-xs font-bold rounded-xl transition-all shadow-xs flex items-center space-x-1.5 cursor-pointer"
-                    >
-                      <FileCheck2 className="w-3.5 h-3.5" />
-                      <span>View in Audit Logs</span>
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {purchaseModal.status === 'error' && (
-                <div className="bg-red-50 border border-red-200 p-3.5 rounded-2xl space-y-1.5 text-xs text-red-700 animate-fadeIn">
-                  <div className="flex items-center space-x-2 font-bold text-xs sm:text-sm text-red-800">
-                    <AlertCircle className="w-4 h-4 text-red-600" />
-                    <span>Execution Error</span>
-                  </div>
-                  <p className="text-[11px] leading-relaxed">{purchaseModal.error}</p>
-                </div>
-              )}
-            </div>
-
-            {/* Footer */}
-            <div className="px-5 py-3 bg-[#FDF8F5] border-t border-[#E9D8CC] flex items-center justify-between text-xs shrink-0">
-              <span className="text-gray-500 font-mono text-[10px] truncate max-w-[200px]">
-                Request ID: {purchaseModal.requestId ? `${purchaseModal.requestId.slice(0, 16)}...` : 'Pending'}
-              </span>
-              {purchaseModal.status === 'completed' || purchaseModal.status === 'error' ? (
-                <button
-                  onClick={() => setPurchaseModal(prev => ({ ...prev, isOpen: false }))}
-                  className="px-4 py-1.5 bg-[#FAD2C0] hover:bg-[#f8bd9e] text-[#343434] font-bold rounded-xl transition-all cursor-pointer"
-                >
-                  Done
-                </button>
-              ) : (
-                <span className="text-[#2563EB] font-bold flex items-center space-x-1.5 text-[11px]">
-                  <RefreshCw className="w-3 h-3 animate-spin" />
-                  <span>Executing Pipeline...</span>
-                </span>
-              )}
             </div>
           </div>
         </div>

@@ -20,7 +20,9 @@ def get_db():
 
 
 def init_db():
+    import backend.app.models  # noqa: F401
     Base.metadata.create_all(bind=engine)
+
     if "sqlite" in settings.DATABASE_URL:
         from sqlalchemy import text
         with engine.connect() as conn:

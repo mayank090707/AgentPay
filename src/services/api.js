@@ -50,6 +50,44 @@ export async function checkBackendHealth() {
 }
 
 /**
+ * Submits a natural-language goal to the AI Agent Run engine for planning and execution (/agent/run).
+ * @param {string} prompt - Natural-language task prompt
+ * @param {number} [maxBudgetEth] - Optional maximum spending limit override
+ * @param {boolean} [autoExecute=true] - Whether to automatically execute planned steps
+ * @returns {Promise<object>}
+ */
+export async function runAgentGoal(prompt, maxBudgetEth = null, autoExecute = true) {
+  return await apiFetch('/agent/run', {
+    method: 'POST',
+    body: JSON.stringify({
+      prompt,
+      max_budget_eth: maxBudgetEth,
+      auto_execute: autoExecute,
+    }),
+  });
+}
+
+/**
+ * Triggers multi-step execution of a planned Agent Run by task ID (/agent/run/execute/{task_id}).
+ * @param {string} taskId
+ * @returns {Promise<object>}
+ */
+export async function executeAgentRun(taskId) {
+  return await apiFetch(`/agent/run/execute/${encodeURIComponent(taskId)}`, {
+    method: 'POST',
+  });
+}
+
+/**
+ * Fetches the current state and execution plan of an Agent Run by task ID (/agent/run/{task_id}).
+ * @param {string} taskId
+ * @returns {Promise<object>}
+ */
+export async function fetchAgentRun(taskId) {
+  return await apiFetch(`/agent/run/${encodeURIComponent(taskId)}`);
+}
+
+/**
  * Queries audit trail log records from FastAPI (/audit/logs).
  * @param {object} [params]
  * @param {string} [params.requestId]
@@ -129,7 +167,7 @@ export async function purchaseService(purchaseData) {
 
 /**
  * Parses raw audit log entries from FastAPI into UI transaction objects.
- * Groups logs by request_id and builds a complete lifecycle record.
+ * Groups logs by request_id/task_id and builds a complete lifecycle record.
  * 
  * @param {Array} logs - Raw audit log items from /audit/logs
  * @returns {Array} List of UI transaction objects
@@ -137,10 +175,10 @@ export async function purchaseService(purchaseData) {
 export function parseAuditLogsToTransactions(logs = []) {
   if (!Array.isArray(logs) || logs.length === 0) return [];
 
-  // Group logs by request_id
+  // Group logs by request_id / task_id
   const grouped = {};
   logs.forEach((log) => {
-    const reqId = log.request_id || 'UNKNOWN';
+    const reqId = log.request_id || log.details?.task_id || 'UNKNOWN';
     if (!grouped[reqId]) {
       grouped[reqId] = [];
     }
@@ -164,6 +202,8 @@ export function parseAuditLogsToTransactions(logs = []) {
     // Sort logs chronologically
     reqLogs.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
 
+    let taskId = null;
+    let stepNumber = null;
     let rawService = 'translation';
     let rawProvider = 'alpha';
     let amount = 0;
@@ -171,6 +211,8 @@ export function parseAuditLogsToTransactions(logs = []) {
     let paymentTx = 'N/A';
     let deliveryStatus = 'Processing';
     let contentHash = 'N/A';
+    let serviceResult = null;
+    let inputDependency = null;
     let firstTimestamp = reqLogs[0]?.timestamp;
     let timestamp = firstTimestamp ? new Date(firstTimestamp).toLocaleTimeString() : 'N/A';
     let date = firstTimestamp ? new Date(firstTimestamp).toISOString().split('T')[0] : 'N/A';
@@ -179,6 +221,10 @@ export function parseAuditLogsToTransactions(logs = []) {
     reqLogs.forEach((log) => {
       const evt = log.event_type;
       const details = log.details || {};
+
+      if (details.task_id) taskId = details.task_id;
+      if (details.step_number) stepNumber = details.step_number;
+      if (details.input_dependency) inputDependency = details.input_dependency;
 
       if (details.service_type || details.service) {
         rawService = details.service_type || details.service;
@@ -190,29 +236,34 @@ export function parseAuditLogsToTransactions(logs = []) {
 
       if (details.amount) {
         amount = details.amount;
-        amountEth = `${amount} ETH`;
+        amountEth = typeof details.amount === 'string' && details.amount.includes('ETH') 
+          ? details.amount 
+          : `${details.amount} ETH`;
       }
 
       if (evt === 'PAYMENT_VERIFIED' || evt === 'PAYMENT_CONFIRMED' || evt === 'SMART_CONTRACT_AUTHORIZATION' || evt === 'PAYMENT_AUTHORIZED') {
-        if (details.tx_hash || details.payment_tx) {
-          paymentTx = details.tx_hash || details.payment_tx;
+        if (details.tx_hash || details.payment_tx || details.transaction_hash) {
+          paymentTx = details.tx_hash || details.payment_tx || details.transaction_hash;
         }
       }
 
-      if (evt === 'SERVICE_DELIVERED' || evt === 'DELIVERY_RECORDED' || evt === 'TASK_COMPLETED') {
+      if (evt === 'SERVICE_DELIVERED' || evt === 'DELIVERY_RECORDED' || evt === 'AGENT_STEP_FULFILLED' || evt === 'TASK_COMPLETED') {
         deliveryStatus = 'Delivered';
         if (details.content_hash || details.hash) {
           contentHash = details.content_hash || details.hash;
         }
-        if (details.tx_hash) {
-          paymentTx = details.tx_hash;
+        if (details.tx_hash || details.transaction_hash) {
+          paymentTx = details.tx_hash || details.transaction_hash;
+        }
+        if (details.output || details.result) {
+          serviceResult = details.output || details.result;
         }
       }
 
-      if (evt === 'BUDGET_EXCEEDED' || evt === 'PAYMENT_FAILED' || evt === 'PAYMENT_REJECTED' || evt === 'PAYMENT_VERIFICATION_FAILED') {
+      if (evt === 'BUDGET_EXCEEDED' || evt === 'AGENT_RUN_BLOCKED' || evt === 'PAYMENT_FAILED' || evt === 'PAYMENT_REJECTED' || evt === 'PAYMENT_VERIFICATION_FAILED') {
         deliveryStatus = 'Blocked';
-        error = details.reason || details.error || details.message || 'Payment blocked by contract budget enforcement';
-        paymentTx = details.tx_hash || '0x000...REJECTED';
+        error = details.reason || details.error || details.error_message || details.message || 'Payment blocked by contract budget enforcement';
+        paymentTx = details.tx_hash || details.transaction_hash || '0x000...REJECTED';
         contentHash = 'N/A - Budget Exceeded';
       }
     });
@@ -223,6 +274,8 @@ export function parseAuditLogsToTransactions(logs = []) {
 
     transactions.push({
       request_id: reqId,
+      task_id: taskId || reqId,
+      step_number: stepNumber,
       service: formattedService,
       provider: formattedProvider,
       amount: typeof amount === 'number' ? amount : parseFloat(amount) || 0,
@@ -230,6 +283,8 @@ export function parseAuditLogsToTransactions(logs = []) {
       payment_tx: paymentTx,
       delivery_status: deliveryStatus,
       content_hash: contentHash,
+      service_result: serviceResult,
+      input_dependency: inputDependency,
       timestamp,
       date,
       error,
@@ -248,6 +303,7 @@ export function parseAuditLogsToTransactions(logs = []) {
 }
 
 const SESSION_RESET_KEY = 'agentpay_session_reset_at';
+const RECENT_PURCHASE_KEY = 'agentpay_recent_purchase_at';
 
 export function getSessionResetTime() {
   const val = localStorage.getItem(SESSION_RESET_KEY);
@@ -258,6 +314,27 @@ export function resetSession() {
   const now = new Date().toISOString();
   localStorage.setItem(SESSION_RESET_KEY, now);
   window.dispatchEvent(new CustomEvent('agentpay:session_reset', { detail: { resetAt: now } }));
+}
+
+/**
+ * Mark that a purchase/agent run just completed so Dashboard/Payments can detect it
+ * on mount even if they weren't listening at the time the event fired.
+ * The flag expires after 10 seconds to avoid stale state.
+ */
+export function markRecentPurchase() {
+  localStorage.setItem(RECENT_PURCHASE_KEY, Date.now().toString());
+}
+
+/**
+ * Returns true (and clears the flag) if a purchase was marked recently (< 10s).
+ * Use this on component mount to detect "just purchased → navigated here".
+ */
+export function consumeRecentPurchase() {
+  const val = localStorage.getItem(RECENT_PURCHASE_KEY);
+  if (!val) return false;
+  const age = Date.now() - parseInt(val, 10);
+  localStorage.removeItem(RECENT_PURCHASE_KEY);
+  return age < 10000; // 10 second window
 }
 
 /**
@@ -287,4 +364,3 @@ export async function runDoublePaymentDemo() {
 export async function fetchSecuritySummary() {
   return await apiFetch('/security-demo/summary');
 }
-

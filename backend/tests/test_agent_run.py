@@ -49,7 +49,7 @@ def client():
 
 # 1. Valid translation goal
 def test_valid_translation_goal(client: TestClient):
-    response = client.post("/agent/run", json={"prompt": "Translate this text into Hindi"})
+    response = client.post("/agent/run", json={"prompt": "Translate this text into Hindi", "auto_execute": False})
     assert response.status_code == 200
     data = response.json()
 
@@ -62,7 +62,7 @@ def test_valid_translation_goal(client: TestClient):
 
 # 2. Valid storage goal
 def test_valid_storage_goal(client: TestClient):
-    response = client.post("/agent/run", json={"prompt": "Store this file in IPFS"})
+    response = client.post("/agent/run", json={"prompt": "Store this file in IPFS", "auto_execute": False})
     assert response.status_code == 200
     data = response.json()
 
@@ -73,7 +73,7 @@ def test_valid_storage_goal(client: TestClient):
 
 # 3. Translation + storage goal
 def test_translation_and_storage_goal(client: TestClient):
-    response = client.post("/agent/run", json={"prompt": "Translate this document to Hindi and store the result"})
+    response = client.post("/agent/run", json={"prompt": "Translate this document to Hindi and store the result", "auto_execute": False})
     assert response.status_code == 200
     data = response.json()
 
@@ -87,7 +87,8 @@ def test_translation_and_storage_goal(client: TestClient):
 # 4. Compute + translation + storage goal
 def test_compute_translation_storage_goal(client: TestClient):
     response = client.post("/agent/run", json={
-        "prompt": "Analyze the dataset, translate the report, and store the archive"
+        "prompt": "Analyze the dataset, translate the report, and store the archive",
+        "auto_execute": False
     })
     assert response.status_code == 200
     data = response.json()
@@ -112,7 +113,7 @@ def test_unsupported_goal(client: TestClient):
 
 # 6. AgentRun is persisted in DB
 def test_agent_run_persisted(client: TestClient):
-    response = client.post("/agent/run", json={"prompt": "Translate this text"})
+    response = client.post("/agent/run", json={"prompt": "Translate this text", "auto_execute": False})
     data = response.json()
     task_id = data["task_id"]
 
@@ -126,7 +127,7 @@ def test_agent_run_persisted(client: TestClient):
 
 # 7. AgentRunStep records are persisted in DB
 def test_agent_run_steps_persisted(client: TestClient):
-    response = client.post("/agent/run", json={"prompt": "Translate text and store it"})
+    response = client.post("/agent/run", json={"prompt": "Translate text and store it", "auto_execute": False})
     data = response.json()
     task_id = data["task_id"]
 
@@ -140,7 +141,7 @@ def test_agent_run_steps_persisted(client: TestClient):
 
 # 8. Total planned cost is persisted correctly
 def test_total_planned_cost_persisted(client: TestClient):
-    response = client.post("/agent/run", json={"prompt": "Translate this text and store it"})
+    response = client.post("/agent/run", json={"prompt": "Translate this text and store it", "auto_execute": False})
     data = response.json()
     task_id = data["task_id"]
 
@@ -155,7 +156,8 @@ def test_total_planned_cost_persisted(client: TestClient):
 def test_within_budget_plan(client: TestClient):
     response = client.post("/agent/run", json={
         "prompt": "Translate this text",
-        "max_budget_eth": 0.01
+        "max_budget_eth": 0.01,
+        "auto_execute": False
     })
     data = response.json()
     assert data["status"] == "PLANNED"
@@ -209,7 +211,8 @@ def test_existing_routes_unaffected(client: TestClient):
 def test_valid_budget_comparison_not_blocked(client: TestClient):
     response = client.post("/agent/run", json={
         "prompt": "Translate 'Hello World' into Hindi and store the result",
-        "max_budget_eth": 0.0100
+        "max_budget_eth": 0.0100,
+        "auto_execute": False
     })
     assert response.status_code == 200
     data = response.json()
@@ -221,13 +224,14 @@ def test_valid_budget_comparison_not_blocked(client: TestClient):
 # 14. Exact budget boundary: max_budget_eth equal to planned cost -> NOT BLOCKED
 def test_exact_budget_boundary_not_blocked(client: TestClient):
     # First plan to get exact planned cost
-    resp1 = client.post("/agent/run", json={"prompt": "Translate this text"})
+    resp1 = client.post("/agent/run", json={"prompt": "Translate this text", "auto_execute": False})
     planned_cost = resp1.json()["total_planned_cost_eth"]
 
     # Submit with max_budget_eth set to exact planned cost
     resp2 = client.post("/agent/run", json={
         "prompt": "Translate this text",
-        "max_budget_eth": planned_cost
+        "max_budget_eth": planned_cost,
+        "auto_execute": False
     })
     assert resp2.status_code == 200
     data = resp2.json()
@@ -237,7 +241,7 @@ def test_exact_budget_boundary_not_blocked(client: TestClient):
 
 # 15. Task persistence and retrieval via GET /agent/run/{task_id}
 def test_get_agent_run_task_retrieval(client: TestClient):
-    post_resp = client.post("/agent/run", json={"prompt": "Translate text and store it"})
+    post_resp = client.post("/agent/run", json={"prompt": "Translate text and store it", "auto_execute": False})
     task_id = post_resp.json()["task_id"]
 
     get_resp = client.get(f"/agent/run/{task_id}")

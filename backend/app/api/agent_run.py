@@ -8,13 +8,13 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Dict, Any, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 from eth_utils import keccak
 from pydantic import SecretStr
 
-from backend.app.database import get_db
+from backend.app.database import get_db, SessionLocal
 from backend.app.config import settings
 from backend.app.core.audit_logger import log_audit_event
 from backend.app.models.agent_run import AgentRun, AgentRunStep, AgentRunStatus, AgentRunStepStatus
@@ -369,12 +369,34 @@ def execute_agent_run_task(agent_run: AgentRun, db: Session) -> AgentRun:
     return agent_run
 
 
+def run_background_agent_task(task_id: str):
+    """
+    Background worker function that opens a fresh DB session and executes an AgentRun asynchronously.
+    """
+    db = SessionLocal()
+    try:
+        agent_run = db.query(AgentRun).filter(AgentRun.task_id == task_id).first()
+        if not agent_run:
+            logger.error(f"Background task failed: AgentRun {task_id} not found in DB")
+            return
+
+        if agent_run.status != AgentRunStatus.EXECUTING:
+            logger.info(f"Background task for {task_id} skipped (current status: {agent_run.status})")
+            return
+
+        execute_agent_run_task(agent_run, db)
+    except Exception as e:
+        logger.error(f"Unhandled exception in background agent run execution {task_id}: {e}")
+    finally:
+        db.close()
+
+
 @router.post("/run", response_model=AgentRunResponse)
-def create_agent_run(req: AgentRunRequest, db: Session = Depends(get_db)):
+def create_agent_run(req: AgentRunRequest, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     """
     Receives a natural-language goal, plans required multi-service execution steps,
     evaluates planned costs against current contract budget, persists the AgentRun,
-    and optionally executes the run via HTTP 402 & Sepolia Smart Contract.
+    and optionally executes the run asynchronously via HTTP 402 & Sepolia Smart Contract.
     """
     if not req.prompt or not req.prompt.strip():
         raise HTTPException(
@@ -503,16 +525,20 @@ def create_agent_run(req: AgentRunRequest, db: Session = Depends(get_db)):
         }
     )
 
-    # Auto-execute if requested and within budget
+    # Auto-execute asynchronously if requested and within budget
     if req.auto_execute and run_status == AgentRunStatus.PLANNED:
-        agent_run = execute_agent_run_task(agent_run, db)
+        agent_run.status = AgentRunStatus.EXECUTING
+        agent_run.started_at = datetime.utcnow()
+        db.commit()
+        db.refresh(agent_run)
+        background_tasks.add_task(run_background_agent_task, task_id)
 
     return _build_agent_run_response(agent_run)
 
 
 @router.post("/run/execute/{task_id}", response_model=AgentRunResponse)
-def execute_agent_run(task_id: str, db: Session = Depends(get_db)):
-    """Triggers real multi-step execution of a planned AgentRun by task_id."""
+def execute_agent_run(task_id: str, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+    """Triggers real multi-step execution of a planned AgentRun by task_id asynchronously."""
     agent_run = db.query(AgentRun).filter(AgentRun.task_id == task_id).first()
     if not agent_run:
         raise HTTPException(
@@ -520,10 +546,16 @@ def execute_agent_run(task_id: str, db: Session = Depends(get_db)):
             detail=f"Agent run with task_id '{task_id}' not found."
         )
 
-    if agent_run.status == AgentRunStatus.BLOCKED:
+    # Idempotency guard: prevent duplicate executions or double payments
+    if agent_run.status in [AgentRunStatus.EXECUTING, AgentRunStatus.COMPLETED, AgentRunStatus.BLOCKED, AgentRunStatus.FAILED]:
         return _build_agent_run_response(agent_run)
 
-    agent_run = execute_agent_run_task(agent_run, db)
+    agent_run.status = AgentRunStatus.EXECUTING
+    agent_run.started_at = datetime.utcnow()
+    db.commit()
+    db.refresh(agent_run)
+
+    background_tasks.add_task(run_background_agent_task, task_id)
     return _build_agent_run_response(agent_run)
 
 

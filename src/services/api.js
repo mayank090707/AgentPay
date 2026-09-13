@@ -246,3 +246,45 @@ export function parseAuditLogsToTransactions(logs = []) {
 
   return transactions;
 }
+
+const SESSION_RESET_KEY = 'agentpay_session_reset_at';
+
+export function getSessionResetTime() {
+  const val = localStorage.getItem(SESSION_RESET_KEY);
+  return val ? new Date(val).getTime() : 0;
+}
+
+export function resetSession() {
+  const now = new Date().toISOString();
+  localStorage.setItem(SESSION_RESET_KEY, now);
+  window.dispatchEvent(new CustomEvent('agentpay:session_reset', { detail: { resetAt: now } }));
+}
+
+/**
+ * Triggers a real budget exceeded test on the backend / smart contract.
+ * @returns {Promise<object>}
+ */
+export async function runBudgetExceededDemo() {
+  return await apiFetch('/security-demo/budget-exceeded', {
+    method: 'POST',
+  });
+}
+
+/**
+ * Triggers a real double payment / replay attack test on the backend / smart contract.
+ * @returns {Promise<object>}
+ */
+export async function runDoublePaymentDemo() {
+  return await apiFetch('/security-demo/double-payment', {
+    method: 'POST',
+  });
+}
+
+/**
+ * Fetches live security summary metrics from backend & audit database.
+ * @returns {Promise<object>}
+ */
+export async function fetchSecuritySummary() {
+  return await apiFetch('/security-demo/summary');
+}
+

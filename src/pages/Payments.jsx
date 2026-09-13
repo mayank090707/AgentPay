@@ -12,7 +12,7 @@ import {
   RefreshCw
 } from 'lucide-react';
 import { useBlockchain } from '../context/BlockchainContext';
-import { fetchAuditLogs, parseAuditLogsToTransactions } from '../services/api';
+import { fetchAuditLogs, parseAuditLogsToTransactions, getSessionResetTime } from '../services/api';
 import StatusBadge from '../components/common/StatusBadge';
 import TransactionModal from '../components/common/TransactionModal';
 
@@ -38,7 +38,12 @@ export default function Payments() {
       const res = await fetchAuditLogs({ limit: 200 });
       if (res && Array.isArray(res.logs)) {
         const parsed = parseAuditLogsToTransactions(res.logs);
-        setTransactions(parsed);
+        const resetTime = getSessionResetTime();
+        const sessionTxs = parsed.filter(tx => {
+          const txTime = new Date(tx.rawLogs?.[0]?.timestamp || tx.timestamp || 0).getTime();
+          return txTime >= resetTime;
+        });
+        setTransactions(sessionTxs);
         setIsBackendLive(true);
       } else {
         setTransactions([]);
@@ -57,14 +62,16 @@ export default function Payments() {
   useEffect(() => {
     loadTransactions();
 
-    const handlePurchaseCompleted = () => {
+    const handleUpdate = () => {
       loadTransactions();
     };
 
-    window.addEventListener('agentpay:purchase_completed', handlePurchaseCompleted);
+    window.addEventListener('agentpay:purchase_completed', handleUpdate);
+    window.addEventListener('agentpay:session_reset', handleUpdate);
 
     return () => {
-      window.removeEventListener('agentpay:purchase_completed', handlePurchaseCompleted);
+      window.removeEventListener('agentpay:purchase_completed', handleUpdate);
+      window.removeEventListener('agentpay:session_reset', handleUpdate);
     };
   }, []);
 

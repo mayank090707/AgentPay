@@ -281,23 +281,23 @@ export default function Audit() {
                       : 'bg-white/70 border-[#E9D8CC] hover:bg-white hover:border-[#FAD2C0]/50'
                   }`}
                 >
-                  <div className="space-y-1">
-                    <div className="flex items-center space-x-2">
-                      <span className="font-mono font-bold text-xs text-[#343434]">
+                  <div className="space-y-1 min-w-0 flex-1 pr-2">
+                    <div className="flex items-center space-x-2 min-w-0">
+                      <span className="font-mono font-bold text-xs text-[#343434] truncate max-w-[120px] inline-block" title={`#${tx.request_id}`}>
                         #{tx.request_id}
                       </span>
-                      <span className="text-xs font-semibold text-gray-700">
+                      <span className="text-xs font-semibold text-gray-700 truncate" title={tx.service}>
                         {tx.service}
                       </span>
                     </div>
-                    <div className="text-[11px] text-gray-500 flex items-center space-x-2">
-                      <span>{tx.provider}</span>
-                      <span>•</span>
-                      <span className="font-mono">{tx.timestamp}</span>
+                    <div className="text-[11px] text-gray-500 flex items-center space-x-1.5 truncate">
+                      <span className="truncate" title={tx.provider}>{tx.provider}</span>
+                      <span className="shrink-0">•</span>
+                      <span className="font-mono shrink-0">{tx.timestamp}</span>
                     </div>
                   </div>
 
-                  <div className="text-right space-y-1">
+                  <div className="text-right space-y-1 shrink-0">
                     <div className="font-extrabold text-xs text-[#343434]">
                       {tx.amountEth ? tx.amountEth : `₹${tx.amount.toFixed(2)}`}
                     </div>
@@ -322,16 +322,18 @@ export default function Audit() {
             
             {/* 4. VISUAL AUDIT TIMELINE */}
             <div className="bg-[#FFF9F5] border border-[#E9D8CC] rounded-3xl p-6 shadow-card space-y-5">
-              <div className="flex items-center justify-between border-b border-[#E9D8CC] pb-4">
-                <div>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#E9D8CC] pb-4">
+                <div className="min-w-0">
                   <span className="text-[10px] font-mono uppercase tracking-widest font-bold text-gray-400 block">
                     LIFECYCLE AUDIT TRAIL
                   </span>
-                  <h2 className="text-lg font-black text-[#343434] mt-0.5 flex items-center space-x-2">
-                    <span>Transaction #{selectedTx.request_id}</span>
+                  <h2 className="text-base sm:text-lg font-black text-[#343434] mt-0.5 flex items-center space-x-2 min-w-0">
+                    <span className="truncate max-w-[200px] sm:max-w-[320px]" title={selectedTx.request_id}>
+                      Transaction #{selectedTx.request_id}
+                    </span>
                     <button
                       onClick={() => copyToClipboard(selectedTx.request_id, 'requestId')}
-                      className="p-1 text-gray-400 hover:text-gray-600 transition-colors cursor-pointer"
+                      className="p-1 text-gray-400 hover:text-gray-600 transition-colors cursor-pointer shrink-0"
                       title="Copy Request ID"
                     >
                       {copiedField === 'requestId' ? (
@@ -343,7 +345,9 @@ export default function Audit() {
                   </h2>
                 </div>
 
-                <StatusBadge status={selectedTx.delivery_status} />
+                <div className="shrink-0">
+                  <StatusBadge status={selectedTx.delivery_status} />
+                </div>
               </div>
 
               {/* Sequential Steps Timeline */}
@@ -358,10 +362,21 @@ export default function Audit() {
                     </span>
                     <span className="font-mono text-gray-400 text-[10px]">{selectedTx.timestamp}</span>
                   </div>
-                  <div className="grid grid-cols-3 gap-2 pt-1 text-gray-700">
-                    <div><span className="text-gray-400 text-[10px] block">Request ID</span><code className="font-bold font-mono">#{selectedTx.request_id}</code></div>
-                    <div><span className="text-gray-400 text-[10px] block">Service</span><span className="font-semibold">{selectedTx.service}</span></div>
-                    <div><span className="text-gray-400 text-[10px] block">Provider</span><span className="font-semibold">{selectedTx.provider}</span></div>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1 text-gray-700 items-start">
+                    <div className="min-w-0">
+                      <span className="text-gray-400 text-[10px] block font-bold uppercase tracking-wider">Request ID</span>
+                      <code className="font-bold font-mono text-xs text-[#343434] block truncate max-w-full" title={selectedTx.request_id}>
+                        #{selectedTx.request_id}
+                      </code>
+                    </div>
+                    <div className="min-w-0">
+                      <span className="text-gray-400 text-[10px] block font-bold uppercase tracking-wider">Service</span>
+                      <span className="font-semibold text-xs text-[#343434] block truncate" title={selectedTx.service}>{selectedTx.service}</span>
+                    </div>
+                    <div className="min-w-0">
+                      <span className="text-gray-400 text-[10px] block font-bold uppercase tracking-wider">Provider</span>
+                      <span className="font-semibold text-xs text-[#343434] block truncate" title={selectedTx.provider}>{selectedTx.provider}</span>
+                    </div>
                   </div>
                 </div>
 
@@ -423,14 +438,14 @@ export default function Audit() {
                       {selectedTx.error || 'Smart Contract Rejected: BUDGET_EXCEEDED.'}
                     </p>
                   ) : (
-                    <div className="flex items-center space-x-2 pt-0.5">
-                      <span className="text-gray-600 text-[11px]">Tx Hash:</span>
-                      <code className="font-mono text-[11px] text-[#55705C] bg-white px-2 py-0.5 rounded border border-[#C8E6C9] truncate">
+                    <div className="flex items-center space-x-2 pt-0.5 min-w-0">
+                      <span className="text-gray-600 text-[11px] shrink-0">Tx Hash:</span>
+                      <code className="font-mono text-[11px] text-[#55705C] bg-white px-2 py-0.5 rounded border border-[#C8E6C9] truncate min-w-0 max-w-full block flex-1" title={selectedTx.payment_tx}>
                         {selectedTx.payment_tx}
                       </code>
                       <button
                         onClick={() => copyToClipboard(selectedTx.payment_tx, 'paymentTx')}
-                        className="text-gray-400 hover:text-gray-600 cursor-pointer"
+                        className="text-gray-400 hover:text-gray-600 cursor-pointer shrink-0"
                         title="Copy Payment Tx Hash"
                       >
                         {copiedField === 'paymentTx' ? (
@@ -481,14 +496,14 @@ export default function Audit() {
                     <span className="font-bold">{isBlocked ? 'N/A' : '✓ VERIFIED ON-CHAIN'}</span>
                   </div>
                   {!isBlocked && (
-                    <div className="flex items-center space-x-2 pt-0.5">
-                      <span className="text-gray-600 text-[11px]">Content Hash:</span>
-                      <code className="font-mono text-[11px] text-gray-700 bg-white px-2 py-0.5 rounded border border-[#BBDEFB] truncate">
+                    <div className="flex items-center space-x-2 pt-0.5 min-w-0">
+                      <span className="text-gray-600 text-[11px] shrink-0">Content Hash:</span>
+                      <code className="font-mono text-[11px] text-gray-700 bg-white px-2 py-0.5 rounded border border-[#BBDEFB] truncate min-w-0 max-w-full block flex-1" title={selectedTx.content_hash}>
                         {selectedTx.content_hash}
                       </code>
                       <button
                         onClick={() => copyToClipboard(selectedTx.content_hash, 'contentHash')}
-                        className="text-gray-400 hover:text-gray-600 cursor-pointer"
+                        className="text-gray-400 hover:text-gray-600 cursor-pointer shrink-0"
                         title="Copy Content Hash"
                       >
                         {copiedField === 'contentHash' ? (
@@ -520,40 +535,40 @@ export default function Audit() {
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs bg-white p-4 rounded-2xl border border-[#E9D8CC]">
-                <div>
+                <div className="min-w-0">
                   <span className="text-gray-400 text-[10px] block font-medium">Request Identifier</span>
-                  <div className="flex items-center space-x-1 mt-0.5">
-                    <code className="font-mono font-bold text-[#343434]">#{selectedTx.request_id}</code>
-                    <button onClick={() => copyToClipboard(selectedTx.request_id, 'requestIdCard')} className="text-gray-400 hover:text-gray-600 cursor-pointer">
+                  <div className="flex items-center space-x-1 mt-0.5 min-w-0">
+                    <code className="font-mono font-bold text-[#343434] truncate max-w-full" title={selectedTx.request_id}>#{selectedTx.request_id}</code>
+                    <button onClick={() => copyToClipboard(selectedTx.request_id, 'requestIdCard')} className="text-gray-400 hover:text-gray-600 cursor-pointer shrink-0">
                       {copiedField === 'requestIdCard' ? <Check className="w-3 h-3 text-[#3E8C5A]" /> : <Copy className="w-3 h-3" />}
                     </button>
                   </div>
                 </div>
 
-                <div>
+                <div className="min-w-0">
                   <span className="text-gray-400 text-[10px] block font-medium">Service Category</span>
-                  <span className="font-semibold text-gray-700 block mt-0.5">{selectedTx.service} ({selectedTx.provider})</span>
+                  <span className="font-semibold text-gray-700 block mt-0.5 truncate" title={`${selectedTx.service} (${selectedTx.provider})`}>{selectedTx.service} ({selectedTx.provider})</span>
                 </div>
 
-                <div className="sm:col-span-2">
+                <div className="sm:col-span-2 min-w-0">
                   <span className="text-gray-400 text-[10px] block font-medium">Sepolia Payment Transaction</span>
-                  <div className="flex items-center space-x-2 mt-1">
-                    <code className="font-mono text-[11px] text-[#55705C] bg-[#FDF8F5] px-2 py-1 rounded border border-[#E9D8CC] truncate block flex-1">
+                  <div className="flex items-center space-x-2 mt-1 min-w-0">
+                    <code className="font-mono text-[11px] text-[#55705C] bg-[#FDF8F5] px-2 py-1 rounded border border-[#E9D8CC] truncate block flex-1 min-w-0" title={selectedTx.payment_tx}>
                       {selectedTx.payment_tx}
                     </code>
-                    <button onClick={() => copyToClipboard(selectedTx.payment_tx, 'paymentTxCard')} className="p-1 bg-white border border-[#E9D8CC] rounded-lg text-gray-500 hover:text-gray-800 cursor-pointer">
+                    <button onClick={() => copyToClipboard(selectedTx.payment_tx, 'paymentTxCard')} className="p-1 bg-white border border-[#E9D8CC] rounded-lg text-gray-500 hover:text-gray-800 cursor-pointer shrink-0">
                       {copiedField === 'paymentTxCard' ? <Check className="w-3.5 h-3.5 text-[#3E8C5A]" /> : <Copy className="w-3.5 h-3.5" />}
                     </button>
                   </div>
                 </div>
 
-                <div className="sm:col-span-2">
+                <div className="sm:col-span-2 min-w-0">
                   <span className="text-gray-400 text-[10px] block font-medium">Delivered Resource Content Hash</span>
-                  <div className="flex items-center space-x-2 mt-1">
-                    <code className="font-mono text-[11px] text-gray-700 bg-[#FDF8F5] px-2 py-1 rounded border border-[#E9D8CC] truncate block flex-1">
+                  <div className="flex items-center space-x-2 mt-1 min-w-0">
+                    <code className="font-mono text-[11px] text-gray-700 bg-[#FDF8F5] px-2 py-1 rounded border border-[#E9D8CC] truncate block flex-1 min-w-0" title={selectedTx.content_hash}>
                       {selectedTx.content_hash}
                     </code>
-                    <button onClick={() => copyToClipboard(selectedTx.content_hash, 'contentHashCard')} className="p-1 bg-white border border-[#E9D8CC] rounded-lg text-gray-500 hover:text-gray-800 cursor-pointer">
+                    <button onClick={() => copyToClipboard(selectedTx.content_hash, 'contentHashCard')} className="p-1 bg-white border border-[#E9D8CC] rounded-lg text-gray-500 hover:text-gray-800 cursor-pointer shrink-0">
                       {copiedField === 'contentHashCard' ? <Check className="w-3.5 h-3.5 text-[#2563EB]" /> : <Copy className="w-3.5 h-3.5" />}
                     </button>
                   </div>

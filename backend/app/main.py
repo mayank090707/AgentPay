@@ -10,6 +10,7 @@ from backend.app.api.payment import router as payment_router
 from backend.app.api.receipts import router as receipts_router
 from backend.app.api.audit import router as audit_router
 from backend.app.api.providers import router as providers_router
+from backend.app.api.security_demo import router as security_demo_router
 
 
 @asynccontextmanager
@@ -50,6 +51,8 @@ app.include_router(services_router)
 app.include_router(payment_router)
 app.include_router(receipts_router)
 app.include_router(audit_router)
+app.include_router(security_demo_router)
+
 
 
 if __name__ == "__main__":

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { RotateCcw } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useBlockchain } from '../context/BlockchainContext';
 import StatCard from '../components/dashboard/StatCard';
@@ -9,7 +10,13 @@ import RecentActivityTable from '../components/dashboard/RecentActivityTable';
 import TopProvidersList from '../components/dashboard/TopProvidersList';
 import MascotBanner from '../components/dashboard/MascotBanner';
 import TransactionModal from '../components/common/TransactionModal';
-import { fetchAuditLogs, fetchProviders, parseAuditLogsToTransactions } from '../services/api';
+import { 
+  fetchAuditLogs, 
+  fetchProviders, 
+  parseAuditLogsToTransactions,
+  getSessionResetTime,
+  resetSession 
+} from '../services/api';
 import { 
   mockContractSummary, 
   mockSpendingOverview, 
@@ -21,6 +28,7 @@ export default function Dashboard() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [selectedTx, setSelectedTx] = useState(null);
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
 
   // ── Blockchain Context (Live Sepolia Read) ─────────────────────────────────
   const { 
@@ -37,80 +45,91 @@ export default function Dashboard() {
   const [isBackendLoading, setIsBackendLoading] = useState(true);
   const [isBackendLive, setIsBackendLive] = useState(false);
 
-  useEffect(() => {
-    let isMounted = true;
+  const loadBackendData = async () => {
+    setIsBackendLoading(true);
+    try {
+      const [logsRes, providersRes] = await Promise.all([
+        fetchAuditLogs({ limit: 100 }).catch(() => null),
+        fetchProviders().catch(() => null),
+      ]);
 
-    async function loadBackendData() {
-      setIsBackendLoading(true);
-      try {
-        const [logsRes, providersRes] = await Promise.all([
-          fetchAuditLogs({ limit: 100 }).catch(() => null),
-          fetchProviders().catch(() => null),
-        ]);
-
-        if (!isMounted) return;
-
-        if (logsRes && Array.isArray(logsRes.logs) && logsRes.logs.length > 0) {
-          const parsedTx = parseAuditLogsToTransactions(logsRes.logs);
-          setTransactions(parsedTx);
-          setIsBackendLive(true);
-        } else {
-          setTransactions([]);
-          setIsBackendLive(false);
-        }
-
-        if (providersRes && Array.isArray(providersRes.providers) && providersRes.providers.length > 0) {
-          const formatted = providersRes.providers.map((p) => {
-            const firstServiceKey = Object.keys(p.services || {})[0] || 'compute';
-            const pricingObj = p.services?.[firstServiceKey];
-            return {
-              id: p.provider_id,
-              name: p.name,
-              service: firstServiceKey.charAt(0).toUpperCase() + firstServiceKey.slice(1),
-              pricePerRequest: pricingObj ? pricingObj.price_per_unit : 0.001,
-              rating: 4.8,
-              iconType: firstServiceKey.toLowerCase(),
-            };
-          });
-          setBackendProviders(formatted);
-        } else {
-          setBackendProviders([]);
-        }
-      } catch (err) {
-        if (isMounted) {
-          setTransactions([]);
-          setBackendProviders([]);
-          setIsBackendLive(false);
-        }
-      } finally {
-        if (isMounted) setIsBackendLoading(false);
+      if (logsRes && Array.isArray(logsRes.logs)) {
+        const parsedTx = parseAuditLogsToTransactions(logsRes.logs);
+        const resetTime = getSessionResetTime();
+        const sessionTxs = parsedTx.filter(tx => {
+          const txTime = new Date(tx.rawLogs?.[0]?.timestamp || tx.timestamp || 0).getTime();
+          return txTime >= resetTime;
+        });
+        setTransactions(sessionTxs);
+        setIsBackendLive(true);
+      } else {
+        setTransactions([]);
+        setIsBackendLive(false);
       }
-    }
 
+      if (providersRes && Array.isArray(providersRes.providers) && providersRes.providers.length > 0) {
+        const formatted = providersRes.providers.map((p) => {
+          const firstServiceKey = Object.keys(p.services || {})[0] || 'compute';
+          const pricingObj = p.services?.[firstServiceKey];
+          return {
+            id: p.provider_id,
+            name: p.name,
+            service: firstServiceKey.charAt(0).toUpperCase() + firstServiceKey.slice(1),
+            pricePerRequest: pricingObj ? pricingObj.price_per_unit : 0.001,
+            rating: 4.8,
+            iconType: firstServiceKey.toLowerCase(),
+          };
+        });
+        setBackendProviders(formatted);
+      } else {
+        setBackendProviders([]);
+      }
+    } catch (err) {
+      setTransactions([]);
+      setBackendProviders([]);
+      setIsBackendLive(false);
+    } finally {
+      setIsBackendLoading(false);
+    }
+  };
+
+  useEffect(() => {
     loadBackendData();
 
+    const handleUpdate = () => {
+      loadBackendData();
+    };
+
+    window.addEventListener('agentpay:purchase_completed', handleUpdate);
+    window.addEventListener('agentpay:session_reset', handleUpdate);
+
     return () => {
-      isMounted = false;
+      window.removeEventListener('agentpay:purchase_completed', handleUpdate);
+      window.removeEventListener('agentpay:session_reset', handleUpdate);
     };
   }, []);
 
-  // ── Compute Dashboard Metrics (Live Contract + Live Audit Logs) ───────────
-  const liveBudgetEth = budget ? parseFloat(budget.budgetEth) : null;
-  const liveSpentEth = budget ? parseFloat(budget.totalSpentEth) : null;
-  const liveRemainingEth = budget ? parseFloat(budget.remainingEth) : null;
-  const progressPercent = budget ? budget.progressPercent : 64;
+  const handleConfirmReset = () => {
+    resetSession();
+    setShowResetConfirm(false);
+    loadBackendData();
+    refreshBlockchain();
+  };
 
-  const totalTxCount = isBackendLive ? transactions.length : mockContractSummary.totalTransactions;
-  const successfulTxCount = isBackendLive 
-    ? transactions.filter(t => t.delivery_status === 'Delivered').length 
-    : mockContractSummary.successfulTransactions;
-  const blockedTxCount = isBackendLive 
-    ? transactions.filter(t => t.delivery_status === 'Blocked').length 
-    : mockContractSummary.blockedTransactions;
+  // ── Compute Dashboard Metrics (Live Session Metrics) ───────────
+  const totalBudgetEth = budget ? parseFloat(budget.budgetEth) : 0.05;
+  const sessionSpentEth = transactions.reduce((acc, t) => t.delivery_status === 'Delivered' ? acc + (t.amount || 0) : acc, 0);
+  const sessionRemainingEth = Math.max(0, totalBudgetEth - sessionSpentEth);
+  const sessionRemainingPercent = totalBudgetEth > 0 ? Math.round((sessionRemainingEth / totalBudgetEth) * 100) : 100;
+  const sessionProgressPercent = totalBudgetEth > 0 ? Math.round((sessionSpentEth / totalBudgetEth) * 100) : 0;
+
+  const totalTxCount = transactions.length;
+  const successfulTxCount = transactions.filter(t => t.delivery_status === 'Delivered').length;
+  const blockedTxCount = transactions.filter(t => t.delivery_status === 'Blocked').length;
 
   // Chart data from transactions or fallback
   const spendingChartData = useMemo(() => {
-    if (!isBackendLive || transactions.length === 0) return mockSpendingOverview;
+    if (transactions.length === 0) return mockSpendingOverview;
     // Group transactions by date
     const dateMap = {};
     transactions.forEach(tx => {
@@ -120,7 +139,7 @@ export default function Dashboard() {
       if (tx.delivery_status === 'Blocked') dateMap[d].blocked += (tx.amount || 1);
     });
     return Object.values(dateMap).slice(-7);
-  }, [isBackendLive, transactions]);
+  }, [transactions]);
 
   return (
     <div className="space-y-6 pt-4 animate-fadeIn select-none">
@@ -150,33 +169,43 @@ export default function Dashboard() {
           </p>
         </div>
 
-        {/* Right Callout Quote */}
-        <div className="text-right hidden md:block">
-          <p className="text-xs font-serif italic text-gray-600 bg-white/60 backdrop-blur-xs px-3 py-1 rounded-full border border-[#E9D8CC]/60">
-            &ldquo;Autonomous agents. Accountable spending.&rdquo;
-          </p>
+        {/* Right Callout Quote & Reset Control */}
+        <div className="flex items-center space-x-3">
+          <button
+            onClick={() => setShowResetConfirm(true)}
+            className="px-3.5 py-1.5 bg-white hover:bg-gray-50 border border-[#E9D8CC] hover:border-[#FAD2C0] text-[#343434] text-xs font-bold rounded-2xl transition-all shadow-xs flex items-center space-x-1.5 cursor-pointer shrink-0"
+            title="Reset current dashboard session (preserves Audit Trail)"
+          >
+            <RotateCcw className="w-3.5 h-3.5 text-[#d97d54]" />
+            <span>Reset Session</span>
+          </button>
+          <div className="text-right hidden md:block">
+            <p className="text-xs font-serif italic text-gray-600 bg-white/60 backdrop-blur-xs px-3 py-1 rounded-full border border-[#E9D8CC]/60">
+              &ldquo;Autonomous agents. Accountable spending.&rdquo;
+            </p>
+          </div>
         </div>
       </div>
 
-      {/* 4 Stat Cards Row — LIVE CONTRACT DATA */}
+      {/* 4 Stat Cards Row — LIVE CONTRACT & SESSION METRICS */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
           type="budget"
           title="Total Budget"
-          value={budget ? `${budget.budgetEth} ETH` : `₹${mockContractSummary.totalBudget.toFixed(2)}`}
+          value={`${totalBudgetEth} ETH`}
           subtitle="Set on-chain by Sepolia Contract"
         />
         <StatCard
           type="spent"
           title="Total Spent"
-          value={budget ? `${budget.totalSpentEth} ETH` : `₹${mockContractSummary.totalSpent.toFixed(2)}`}
-          progress={progressPercent}
+          value={`${sessionSpentEth.toFixed(4)} ETH`}
+          progress={sessionProgressPercent}
         />
         <StatCard
           type="remaining"
           title="Remaining"
-          value={budget ? `${budget.remainingEth} ETH` : `₹${mockContractSummary.remainingBudget.toFixed(2)}`}
-          badgeText={`${budget ? budget.remainingPercent : 36}% left`}
+          value={`${sessionRemainingEth.toFixed(4)} ETH`}
+          badgeText={`${sessionRemainingPercent}% left`}
         />
         <StatCard
           type="transactions"
@@ -193,9 +222,9 @@ export default function Dashboard() {
         </div>
         <div className="lg:col-span-1">
           <BudgetUsageChart 
-            spent={liveSpentEth !== null ? liveSpentEth : mockContractSummary.totalSpent} 
-            remaining={liveRemainingEth !== null ? liveRemainingEth : mockContractSummary.remainingBudget}
-            total={liveBudgetEth !== null ? liveBudgetEth : mockContractSummary.totalBudget}
+            spent={sessionSpentEth} 
+            remaining={sessionRemainingEth}
+            total={totalBudgetEth}
           />
         </div>
       </div>
@@ -225,6 +254,42 @@ export default function Dashboard() {
           transaction={selectedTx}
           onClose={() => setSelectedTx(null)}
         />
+      )}
+
+      {/* Reset Session Confirmation Modal */}
+      {showResetConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs animate-fadeIn select-none">
+          <div className="bg-[#FFF9F5] border border-[#E9D8CC] rounded-3xl w-full max-w-md shadow-2xl p-6 space-y-4 text-[#343434]">
+            <div className="flex items-center space-x-3 text-[#d97d54]">
+              <div className="w-10 h-10 rounded-2xl bg-[#FAD2C0]/40 flex items-center justify-center shrink-0">
+                <RotateCcw className="w-5 h-5 text-[#d97d54]" />
+              </div>
+              <div>
+                <h3 className="font-extrabold text-base text-[#343434]">Reset current dashboard session?</h3>
+                <p className="text-xs text-gray-500 font-medium">Session Reset Confirmation</p>
+              </div>
+            </div>
+
+            <p className="text-xs text-gray-600 leading-relaxed">
+              Current transactions and spending display will be cleared for Dashboard and Payments. <strong>Audit history and smart contract records will be preserved.</strong>
+            </p>
+
+            <div className="flex items-center justify-end space-x-3 pt-2">
+              <button
+                onClick={() => setShowResetConfirm(false)}
+                className="px-4 py-2 bg-white border border-[#E9D8CC] text-[#343434] text-xs font-bold rounded-xl hover:bg-gray-50 transition-all cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmReset}
+                className="px-4 py-2 bg-[#d97d54] hover:bg-[#c66c45] text-white text-xs font-bold rounded-xl transition-all shadow-xs cursor-pointer"
+              >
+                Reset Session
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

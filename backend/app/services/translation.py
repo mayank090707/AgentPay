@@ -1,39 +1,42 @@
 import time
 from typing import Dict, Any
 
+from backend.app.config import settings
+from backend.app.services.gemini_client import generate_translation_and_summary, GeminiServiceError
+
 
 def translate_text(text: str, source_lang: str, target_lang: str) -> Dict[str, Any]:
     """
-    Simulates high-performance AI neural text translation.
+    Executes real Gemini neural text translation and summarization.
+    
+    Returns structured data containing:
+    - translated_text: translated content into target language
+    - summary: concise summary of the original text
+    
+    Strict constraints:
+    - Never uses mock or simulated dictionary translations.
+    - Raises GeminiServiceError if GEMINI_API_KEY is not configured or if API call fails.
     """
     start_time = time.time()
     
-    # Mock translations for key hackathon demo phrases
-    mock_dictionary = {
-        "hello": {"es": "hola", "fr": "bonjour", "de": "hallo", "es_mx": "hola"},
-        "payment received": {"es": "pago recibido", "fr": "paiement reçu", "de": "zahlung erhalten"},
-        "agentpay": {"es": "AgentPay (Plataforma)", "fr": "AgentPay (Plateforme)", "de": "AgentPay (Plattform)"}
-    }
+    gemini_result = generate_translation_and_summary(
+        text=text,
+        source_lang=source_lang,
+        target_lang=target_lang,
+        api_key=settings.GEMINI_API_KEY,
+        model_name=settings.GEMINI_MODEL,
+    )
     
-    clean_text = text.strip().lower()
-    if clean_text in mock_dictionary and target_lang in mock_dictionary[clean_text]:
-        translated_text = mock_dictionary[clean_text][target_lang]
-    else:
-        # Fallback simulation prefix
-        translated_text = f"[{target_lang.upper()}] {text}"
-        
-    char_count = len(text)
-    word_count = len(text.split())
-    tokens_used = max(1, int(word_count * 1.3))
-    elapsed_ms = round((time.time() - start_time) * 1000 + 12, 2)
+    elapsed_ms = round((time.time() - start_time) * 1000, 2)
     
     return {
         "original_text": text,
-        "translated_text": translated_text,
+        "translated_text": gemini_result["translated_text"],
+        "summary": gemini_result["summary"],
         "source_language": source_lang,
         "target_language": target_lang,
-        "character_count": char_count,
-        "tokens_processed": tokens_used,
-        "confidence_score": 0.985,
-        "latency_ms": elapsed_ms
+        "character_count": len(text),
+        "word_count": len(text.split()),
+        "model_used": settings.GEMINI_MODEL,
+        "latency_ms": elapsed_ms,
     }

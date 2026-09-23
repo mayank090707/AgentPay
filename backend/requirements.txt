@@ -7,3 +7,5 @@ pytest>=7.0.0
 httpx>=0.24.0
 web3>=7.0.0
 eth-abi>=5.0.0
+google-genai>=1.0.0
+

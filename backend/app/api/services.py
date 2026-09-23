@@ -36,10 +36,11 @@ from backend.app.models.delivery import Delivery
 from backend.app.models.payment import Payment
 from backend.app.core.provider_registry import get_provider
 
-# Import simulated service functions
+# Service execution functions
 from backend.app.services.translation import translate_text
 from backend.app.services.compute import run_compute
 from backend.app.services.storage import store_object
+from backend.app.services.gemini_client import GeminiServiceError
 
 router = APIRouter(prefix="/services", tags=["Services & HTTP 402"])
 
@@ -415,34 +416,47 @@ def handle_service_execution(
         )
 
     # Execute service payload
-    if service_type == "translation":
-        service_data = translate_text(
-            text=payload.get("text", ""),
-            source_lang=payload.get("source_lang", "auto"),
-            target_lang=payload.get("target_lang", "en")
+    # Execute service payload
+    try:
+        if service_type == "translation":
+            service_data = translate_text(
+                text=payload.get("text", ""),
+                source_lang=payload.get("source_lang", "auto"),
+                target_lang=payload.get("target_lang", "en")
+            )
+        elif service_type == "summarization":
+            input_text = payload.get("text") or payload.get("value") or str(payload)
+            summary_result = f"Summary: {input_text[:120]}... [Condensed key insights extracted by AI Agent]"
+            service_data = {
+                "summary": summary_result,
+                "original_length": len(input_text),
+                "summary_length": len(summary_result),
+                "status": "completed",
+            }
+        elif service_type == "compute":
+            service_data = run_compute(
+                operation=payload.get("operation", "matrix_multiply"),
+                params=payload.get("params", {})
+            )
+        elif service_type == "storage":
+            service_data = store_object(
+                key=payload.get("key", "default"),
+                value=payload.get("value", ""),
+                ttl_seconds=payload.get("ttl_seconds", 3600)
+            )
+        else:
+            service_data = {"result": "processed", "payload": payload}
+    except GeminiServiceError as e:
+        log_audit_event(
+            db=db,
+            request_id=quote.request_id,
+            event_type="SERVICE_EXECUTION_FAILED",
+            details={"service_type": service_type, "error": str(e)}
         )
-    elif service_type == "summarization":
-        input_text = payload.get("text") or payload.get("value") or str(payload)
-        summary_result = f"Summary: {input_text[:120]}... [Condensed key insights extracted by AI Agent]"
-        service_data = {
-            "summary": summary_result,
-            "original_length": len(input_text),
-            "summary_length": len(summary_result),
-            "status": "completed",
-        }
-    elif service_type == "compute":
-        service_data = run_compute(
-            operation=payload.get("operation", "matrix_multiply"),
-            params=payload.get("params", {})
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Service execution error: {str(e)}"
         )
-    elif service_type == "storage":
-        service_data = store_object(
-            key=payload.get("key", "default"),
-            value=payload.get("value", ""),
-            ttl_seconds=payload.get("ttl_seconds", 3600)
-        )
-    else:
-        service_data = {"result": "processed", "payload": payload}
 
     # Compute hashes & receipt
     delivery_input_hash = compute_input_hash(payload)
@@ -489,7 +503,6 @@ def handle_service_execution(
 
 
 @router.post("/translate")
-@router.post("/translation")
 def service_translate(
     request: TranslationRequest,
     x_payment_proof: Optional[str] = Header(None, alias="X-Payment-Proof"),
@@ -526,213 +539,4 @@ def service_storage(
     Simulated Cloud / IPFS Storage endpoint with HTTP 402 payment flow.
     """
     return handle_service_execution("storage", request.model_dump(), x_payment_proof, db, provider_id=request.provider_id, x_request_id=x_request_id)
-
-
-@router.post("/summarize")
-def service_summarize(
-    request: SummarizationRequest,
-    x_payment_proof: Optional[str] = Header(None, alias="X-Payment-Proof"),
-    x_request_id: Optional[str] = Header(None, alias="X-Request-ID"),
-    db: Session = Depends(get_db)
-):
-    """
-    Simulated AI Summarization Service endpoint with HTTP 402 payment flow.
-    """
-    return handle_service_execution("summarization", request.model_dump(), x_payment_proof, db, provider_id=request.provider_id, x_request_id=x_request_id)
-
-
-class ServicePurchaseRequest(BaseModel):
-    service_type: str
-    provider_id: Optional[str] = None
-    payload: Optional[dict] = None
-    request_id: Optional[str] = None
-
-
-@router.post("/purchase")
-def purchase_service_endpoint(
-    request: ServicePurchaseRequest,
-    db: Session = Depends(get_db)
-):
-    """
-    Executes a real purchase flow via Agent Orchestrator and Smart Contract on Sepolia.
-    """
-    service_type = request.service_type.lower()
-    if service_type not in ("translation", "compute", "storage", "summarization", "summarize"):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid service type '{request.service_type}'. Must be one of: translation, compute, storage, summarization."
-        )
-
-    provider_id = request.provider_id or "alpha"
-
-    # Construct request payload if not provided
-    payload = request.payload or {}
-    if not payload:
-        if service_type in ("translation", "translate"):
-            payload = {"text": "Autonomous Agent AI Service Request", "source_lang": "en", "target_lang": "es", "provider_id": provider_id}
-        elif service_type in ("summarization", "summarize"):
-            payload = {"text": "Autonomous AI agent completed task with payment authorization.", "max_length": 150, "provider_id": provider_id}
-        elif service_type == "compute":
-            payload = {"operation": "matrix_multiply", "params": {"matrix_size": 100}, "provider_id": provider_id}
-        elif service_type == "storage":
-            payload = {"key": "dataset_snapshot", "value": "Decentralized AI model weights proof", "provider_id": provider_id}
-
-    if "provider_id" not in payload and provider_id:
-        payload["provider_id"] = provider_id
-
-    # Resolve Request ID (32-byte hex, 66 characters starting with 0x)
-    if request.request_id and request.request_id.startswith("0x") and len(request.request_id) == 66:
-        req_id_str = request.request_id
-    else:
-        req_id_str = "0x" + keccak(text=f"req_{time.time()}_{uuid.uuid4()}").hex()
-
-    from agent.src.orchestrator import Orchestrator
-    from agent.src.provider_client import ProviderClient
-    from agent.src.contract_client import ContractClient
-    from agent.src.payment_client import PaymentClient
-    from agent.src.models import ServiceRequest, RequestId
-    from agent.src.config import Settings as AgentSettings, get_settings as get_agent_settings
-    from agent.src.exceptions import BudgetExceededError, PaymentError, DeliveryError, ConfigurationError
-
-    rpc_url = os.getenv("RPC_URL") or os.getenv("SEPOLIA_RPC_URL") or settings.RPC_URL
-    contract_addr = os.getenv("CONTRACT_ADDRESS") or os.getenv("VITE_CONTRACT_ADDRESS") or settings.CONTRACT_ADDRESS
-    agent_addr = os.getenv("AGENT_ADDRESS")
-    agent_pk = os.getenv("AGENT_PRIVATE_KEY")
-    provider_base_url = os.getenv("PROVIDER_BASE_URL") or "http://localhost:8000"
-
-    # Check required environment configuration
-    missing_vars = []
-    if not rpc_url: missing_vars.append("RPC_URL (or SEPOLIA_RPC_URL)")
-    if not contract_addr: missing_vars.append("CONTRACT_ADDRESS (or VITE_CONTRACT_ADDRESS)")
-    if not agent_addr: missing_vars.append("AGENT_ADDRESS")
-    if not agent_pk: missing_vars.append("AGENT_PRIVATE_KEY")
-
-    if missing_vars:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Real on-chain payment execution requires missing environment variables: {', '.join(missing_vars)}. Configure these in your .env file."
-        )
-
-    try:
-        client_settings = AgentSettings(
-            RPC_URL=rpc_url,
-            CONTRACT_ADDRESS=contract_addr,
-            CHAIN_ID=int(os.getenv("CHAIN_ID") or os.getenv("VITE_CHAIN_ID") or 11155111),
-            AGENT_ADDRESS=agent_addr,
-            AGENT_PRIVATE_KEY=SecretStr(agent_pk),
-            PROVIDER_BASE_URL=provider_base_url,
-        )
-
-        env_provider_url = (
-            os.getenv("PROVIDER_BASE_URL") 
-            or os.getenv("PROVIDER_URL") 
-            or os.getenv("RENDER_EXTERNAL_URL") 
-            or ""
-        ).strip()
-        for path_suffix in ["/services/translation", "/services/translate", "/services/compute", "/services/storage", "/services"]:
-            if env_provider_url.rstrip("/").endswith(path_suffix):
-                env_provider_url = env_provider_url.rstrip("/")[:-len(path_suffix)].rstrip("/")
-                break
-
-        is_external_provider = (
-            env_provider_url != "" 
-            and not env_provider_url.startswith("http://localhost") 
-            and not env_provider_url.startswith("http://127.0.0.1")
-            and not env_provider_url.startswith("http://testserver")
-        )
-
-        if is_external_provider:
-            provider_client = ProviderClient(base_url=env_provider_url)
-        else:
-            from fastapi.testclient import TestClient
-            from backend.app.main import app
-            test_client = TestClient(app, base_url="http://testserver")
-            provider_client = ProviderClient(base_url="http://testserver", http_client=test_client)
-        contract_client = ContractClient(settings=client_settings)
-        payment_client = PaymentClient(contract_client=contract_client)
-
-        orchestrator = Orchestrator(
-            provider_client=provider_client,
-            contract_client=contract_client,
-            payment_client=payment_client,
-            payer_address=agent_addr,
-        )
-
-        endpoint_mapping = {
-            "translation": "/services/translate",
-            "translate": "/services/translate",
-            "compute": "/services/compute",
-            "storage": "/services/storage",
-        }
-        endpoint_path = endpoint_mapping.get(service_type.lower(), f"/services/{service_type}")
-
-        logger.info(
-            "Initiating provider request | provider=%s | service=%s | endpoint_path=%s | request_id=%s",
-            provider_id,
-            service_type,
-            endpoint_path,
-            req_id_str,
-        )
-
-        service_req = ServiceRequest(
-            request_id=RequestId(req_id_str),
-            service=service_type,
-            payload=payload,
-            provider=provider_id,
-        )
-
-        result = orchestrator.run(service_req, endpoint_path=endpoint_path)
-
-        now_iso = datetime.utcnow().isoformat() + "Z"
-        return {
-            "status": "success",
-            "request_id": str(result.request_id),
-            "service": service_type,
-            "service_type": service_type,
-            "provider": provider_id,
-            "provider_id": provider_id,
-            "amount": float(result.amount),
-            "transaction_hash": result.payment_reference,
-            "payment_status": "CONFIRMED",
-            "delivery_status": "FULFILLED",
-            "content_hash": result.content_hash,
-            "timestamp": now_iso,
-            "receipt": {
-                "request_id": str(result.request_id),
-                "provider": result.provider,
-                "provider_id": provider_id,
-                "service": service_type,
-                "amount": float(result.amount),
-                "currency": result.currency,
-                "tx_hash": result.payment_reference,
-                "content_hash": result.content_hash,
-                "timestamp": now_iso,
-            }
-        }
-    except BudgetExceededError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Smart contract payment rejected: Budget exceeded. {str(e)}"
-        )
-    except PaymentError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Blockchain payment failed: {str(e)}"
-        )
-    except DeliveryError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Service delivery failed after payment: {str(e)}"
-        )
-    except ConfigurationError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Agent configuration error: {str(e)}"
-        )
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Purchase execution failed: {str(e)}"
-        )
-
 

@@ -62,3 +62,29 @@ def client(db_session):
         db_mod.SessionLocal = orig_db_session_local
     if orig_agent_session_local:
         agent_run_mod.SessionLocal = orig_agent_session_local
+
+@pytest.fixture(autouse=True)
+def mock_gemini_translation_for_tests(monkeypatch, request):
+    """
+    Default fixture to simulate Gemini responses during standard integration tests,
+    ensuring existing test suites run deterministically in CI without live API keys.
+    Can be bypassed using @pytest.mark.no_mock_gemini.
+    """
+    if "no_mock_gemini" in request.keywords:
+        return
+
+    from backend.app.config import settings
+    monkeypatch.setattr(settings, "GEMINI_API_KEY", "test_gemini_api_key_override")
+
+    def _mock_translate_summary(text: str, source_lang: str, target_lang: str, api_key: str, model_name: str = "gemini-2.5-flash"):
+        clean = text.strip().lower()
+        if "hello" in clean:
+            translated = "hola" if target_lang == "es" else f"[{target_lang.upper()}] {text}"
+        else:
+            translated = f"[{target_lang.upper()}] {text}"
+        return {
+            "translated_text": translated,
+            "summary": f"Summary: {text.strip()[:40]}",
+        }
+
+    monkeypatch.setattr("backend.app.services.translation.generate_translation_and_summary", _mock_translate_summary)

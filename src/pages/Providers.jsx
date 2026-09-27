@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { 
-  Users, 
-  Languages, 
-  Database, 
-  Cpu, 
-  Star, 
-  ShieldCheck, 
-  X, 
+import {
+  Users,
+  Languages,
+  Database,
+  Cpu,
+  Star,
+  ShieldCheck,
+  X,
   ArrowUpDown,
   RefreshCw,
   Bot,
@@ -235,7 +235,7 @@ export default function Providers() {
       // Map service type to the correct backend endpoint path.
       // The translation endpoint is /services/translate (not /services/translation).
       const serviceEndpoint = serviceType === 'translation' ? 'translate' : serviceType;
-      
+
       let response = null;
       let quoteData = null;
 
@@ -319,7 +319,7 @@ export default function Providers() {
           try {
             const errJson = await res2.json();
             if (errJson.detail) errDetail = errJson.detail;
-          } catch (_) {}
+          } catch (_) { }
           throw new Error(errDetail);
         }
       }
@@ -386,18 +386,17 @@ export default function Providers() {
 
       {/* 2. Catalog Control Bar (Filters & Sorting) */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-[#FFF9F5] p-3 rounded-3xl border border-[#E9D8CC] shadow-card">
-        
+
         {/* Category Tabs */}
         <div className="flex items-center space-x-1.5 overflow-x-auto pb-1 sm:pb-0">
           {['All', 'Translation', 'Storage', 'Compute'].map((category) => (
             <button
               key={category}
               onClick={() => setSelectedCategory(category)}
-              className={`px-4 py-2 rounded-2xl text-xs font-bold transition-all shrink-0 cursor-pointer ${
-                selectedCategory === category
-                  ? 'bg-[#FAD2C0] text-[#343434] shadow-xs'
-                  : 'bg-white text-gray-600 hover:bg-[#FDF8F5] border border-[#E9D8CC]'
-              }`}
+              className={`px-4 py-2 rounded-2xl text-xs font-bold transition-all shrink-0 cursor-pointer ${selectedCategory === category
+                ? 'bg-[#FAD2C0] text-[#343434] shadow-xs'
+                : 'bg-white text-gray-600 hover:bg-[#FDF8F5] border border-[#E9D8CC]'
+                }`}
             >
               {category}
             </button>
@@ -516,13 +515,12 @@ export default function Providers() {
                   {/* Signal Badges */}
                   {provider.badge && (
                     <div className="mt-3">
-                      <span className={`inline-block px-2.5 py-0.5 rounded-full text-[9px] font-extrabold tracking-wide uppercase ${
-                        provider.badge === 'LOWEST PRICE' 
-                          ? 'bg-[#E8F5E9] text-[#3E8C5A] border border-[#C8E6C9]' 
-                          : provider.badge === 'TOP QUALITY'
+                      <span className={`inline-block px-2.5 py-0.5 rounded-full text-[9px] font-extrabold tracking-wide uppercase ${provider.badge === 'LOWEST PRICE'
+                        ? 'bg-[#E8F5E9] text-[#3E8C5A] border border-[#C8E6C9]'
+                        : provider.badge === 'TOP QUALITY'
                           ? 'bg-[#E3F2FD] text-[#2563EB] border border-[#BBDEFB]'
                           : 'bg-[#FFF3E0] text-[#E65100] border border-[#FFE0B2]'
-                      }`}>
+                        }`}>
                         {provider.badge}
                       </span>
                     </div>
@@ -561,10 +559,16 @@ export default function Providers() {
 
                 {/* Card Footer Actions */}
                 <div className="pt-2 flex items-center justify-between gap-2 text-xs">
-                  <div className="flex-1 py-2 px-3 bg-gray-100 border border-gray-200 text-gray-500 font-bold text-[11px] rounded-xl flex items-center justify-center space-x-1.5">
-                    <ShieldCheck className="w-3.5 h-3.5 text-[#3E8C5A]" />
-                    <span>Agent Compatible</span>
-                  </div>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleBuyService(provider);
+                    }}
+                    className="flex-1 py-2 bg-[#FAD2C0] hover:bg-[#f8bd9e] text-[#343434] font-extrabold text-xs rounded-xl transition-all shadow-xs flex items-center justify-center space-x-1.5 cursor-pointer"
+                  >
+                    <ShoppingCart className="w-3.5 h-3.5" />
+                    <span>Buy / Request Service</span>
+                  </button>
 
                   <button
                     onClick={(e) => {
@@ -586,7 +590,7 @@ export default function Providers() {
       {selectedProvider && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs animate-fadeIn select-none">
           <div className="bg-[#FFF9F5] border border-[#E9D8CC] rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden text-[#343434]">
-            
+
             {/* Modal Header */}
             <div className="px-6 py-4 border-b border-[#E9D8CC] flex items-center justify-between bg-white">
               <div className="flex items-center space-x-3">
@@ -610,7 +614,7 @@ export default function Providers() {
 
             {/* Modal Body */}
             <div className="p-6 space-y-4 max-h-[80vh] overflow-y-auto">
-              
+
               {/* Description */}
               <div>
                 <span className="text-[10px] font-mono uppercase tracking-widest font-bold text-gray-400 block mb-1">
@@ -745,7 +749,7 @@ export default function Providers() {
       {purchaseModal.isOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-fadeIn select-none">
           <div className="bg-[#FFF9F5] border border-[#E9D8CC] rounded-3xl w-full max-w-xl shadow-2xl overflow-hidden text-[#343434]">
-            
+
             {/* Header */}
             <div className="px-6 py-4 border-b border-[#E9D8CC] flex items-center justify-between bg-white">
               <div className="flex items-center space-x-3">
@@ -771,7 +775,7 @@ export default function Providers() {
 
             {/* Content Body */}
             <div className="p-6 space-y-5 max-h-[80vh] overflow-y-auto">
-              
+
               {/* Selected Target Summary */}
               <div className="bg-white p-4 rounded-2xl border border-[#E9D8CC] flex items-center justify-between text-xs">
                 <div>
@@ -804,13 +808,12 @@ export default function Providers() {
 
                   return (
                     <div key={item.step} className="flex items-start space-x-3 text-xs">
-                      <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 font-bold transition-all ${
-                        isDone 
-                          ? 'bg-[#E8F5E9] text-[#3E8C5A] border border-[#C8E6C9]' 
-                          : isCurrent 
-                          ? 'bg-[#E3F2FD] text-[#2563EB] border border-[#BBDEFB] animate-pulse' 
+                      <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 font-bold transition-all ${isDone
+                        ? 'bg-[#E8F5E9] text-[#3E8C5A] border border-[#C8E6C9]'
+                        : isCurrent
+                          ? 'bg-[#E3F2FD] text-[#2563EB] border border-[#BBDEFB] animate-pulse'
                           : 'bg-gray-100 text-gray-400 border border-gray-200'
-                      }`}>
+                        }`}>
                         {isDone ? <Check className="w-3.5 h-3.5" /> : item.step}
                       </div>
 

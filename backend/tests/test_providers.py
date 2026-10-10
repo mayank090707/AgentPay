@@ -13,38 +13,39 @@ def test_list_providers(client):
     response = client.get("/providers")
     assert response.status_code == 200
     data = response.json()
-    assert data["total"] == 8
+    assert data["total"] == 3
     provider_ids = [p["provider_id"] for p in data["providers"]]
     assert "alpha" in provider_ids
     assert "beta" in provider_ids
+    assert "gamma" in provider_ids
 
     # Verify provider details
     alpha = next(p for p in data["providers"] if p["provider_id"] == "alpha")
-    assert alpha["name"] == "Alpha AI"
+    assert alpha["name"] == "Translation Alpha"
     assert alpha["wallet_address"] == PROVIDER_REGISTRY["alpha"].wallet_address
-    assert alpha["services"]["translation"]["price_per_unit"] == 0.00010
+    assert alpha["services"]["translation"]["price_per_unit"] == 0.005
 
     beta = next(p for p in data["providers"] if p["provider_id"] == "beta")
-    assert beta["name"] == "Beta Cloud"
+    assert beta["name"] == "Translation Beta"
     assert beta["wallet_address"] == PROVIDER_REGISTRY["beta"].wallet_address
-    assert beta["services"]["translation"]["price_per_unit"] == 0.00002
+    assert beta["services"]["translation"]["price_per_unit"] == 0.003
 
 
 def test_compare_providers_translation(client):
     """
     GET /providers/compare/translation should sort providers cheapest first.
-    Beta (0.00002/100 chars) is cheaper than Alpha (0.00010/100 chars).
+    Gamma (0.001) < Beta (0.003) < Alpha (0.005).
     """
     test_text = "Hello world! This is a test text for price comparison."  # < 100 chars -> 1 unit
     response = client.get(f"/providers/compare/translation?text={test_text}")
     assert response.status_code == 200
     data = response.json()
     assert data["service_type"] == "translation"
-    assert len(data["providers"]) == 8
+    assert len(data["providers"]) == 3
 
-    # Lowest priced provider (0.00002 ETH) should be first
-    assert data["providers"][0]["calculated_price"] == 0.00002
-    assert data["providers"][0]["provider_id"] in ["beta", "prov_trans_01"]
+    # Lowest priced provider (0.001 ETH) should be first
+    assert data["providers"][0]["calculated_price"] == 0.001
+    assert data["providers"][0]["provider_id"] == "gamma"
 
 
 def test_compare_providers_storage(client):
@@ -56,7 +57,7 @@ def test_compare_providers_storage(client):
     assert response.status_code == 200
     data = response.json()
     assert data["service_type"] == "storage"
-    assert len(data["providers"]) == 8
+    assert len(data["providers"]) == 3
 
     # Verify cheapest prices come first
     prices = [p["calculated_price"] for p in data["providers"]]
@@ -89,12 +90,12 @@ def test_service_request_with_specific_provider_quote(client):
     # Headers check
     beta_wallet = PROVIDER_REGISTRY["beta"].wallet_address
     assert response.headers["X-Payment-Address"] == beta_wallet
-    assert float(response.headers["X-Payment-Amount"]) == 0.00002
+    assert float(response.headers["X-Payment-Amount"]) == 0.003
 
     # Body check
     data = response.json()
     assert data["pay_to_address"] == beta_wallet
-    assert data["amount"] == 0.00002
+    assert data["amount"] == 0.003
 
 
 def test_service_request_with_alpha_provider_quote(client):
@@ -113,11 +114,11 @@ def test_service_request_with_alpha_provider_quote(client):
 
     alpha_wallet = PROVIDER_REGISTRY["alpha"].wallet_address
     assert response.headers["X-Payment-Address"] == alpha_wallet
-    assert float(response.headers["X-Payment-Amount"]) == 0.00010
+    assert float(response.headers["X-Payment-Amount"]) == 0.005
 
     data = response.json()
     assert data["pay_to_address"] == alpha_wallet
-    assert data["amount"] == 0.00010
+    assert data["amount"] == 0.005
 
 
 def test_service_request_unknown_provider_404(client):
@@ -128,11 +129,11 @@ def test_service_request_unknown_provider_404(client):
         "text": "Hello world",
         "source_lang": "en",
         "target_lang": "es",
-        "provider_id": "gamma_unknown"
+        "provider_id": "unknown_provider"
     }
     response = client.post("/services/translate", json=payload)
     assert response.status_code == 404
-    assert "Provider 'gamma_unknown' not found" in response.json()["detail"]
+    assert "Provider 'unknown_provider' not found" in response.json()["detail"]
 
 
 def test_service_request_without_provider_id_uses_default(client):
@@ -196,7 +197,7 @@ def test_full_flow_with_selected_provider_and_receipt_verification(client):
     # 3. Verify receipt fields
     receipt = delivery_data["receipt"]
     assert receipt["provider_address"] == beta_wallet
-    assert receipt["amount"] == 0.00002
+    assert receipt["amount"] == 0.003
 
     # 4. Verify HMAC signature using ReceiptResponse
     receipt_obj = ReceiptResponse(**receipt)

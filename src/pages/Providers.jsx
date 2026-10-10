@@ -16,7 +16,7 @@ import { fetchProviders } from '../services/api';
 import { mockProviders } from '../data/mockData';
 
 export default function Providers() {
-  const [selectedCategory, setSelectedCategory] = useState('All');
+  const [selectedCategory, setSelectedCategory] = useState('Translation');
   const [sortBy, setSortBy] = useState('price-low');
   const [selectedProvider, setSelectedProvider] = useState(null);
 
@@ -33,34 +33,80 @@ export default function Providers() {
         const res = await fetchProviders();
         if (!isMounted) return;
         if (res && Array.isArray(res.providers) && res.providers.length > 0) {
+          const formattedMap = {
+            alpha: {
+              id: 'p1_trans',
+              provider_id: 'alpha',
+              name: 'Translation Alpha',
+              service: 'Translation',
+              price: 0.005,
+              currency: 'ETH',
+              quality: 94,
+              qualityLabel: '94%',
+              efficiencyLabel: '94%',
+              rating: 4.9,
+              responseTime: '50ms',
+              responseTimeMs: 50,
+              status: 'Available',
+              badge: 'TOP QUALITY',
+              description: 'High-efficiency neural translation provider with maximum precision and fast speed.',
+              endpoint: 'http://localhost:8000/services/translate?provider_id=alpha',
+            },
+            beta: {
+              id: 'p2_trans',
+              provider_id: 'beta',
+              name: 'Translation Beta',
+              service: 'Translation',
+              price: 0.003,
+              currency: 'ETH',
+              quality: 67,
+              qualityLabel: '67%',
+              efficiencyLabel: '67%',
+              rating: 4.6,
+              responseTime: '120ms',
+              responseTimeMs: 120,
+              status: 'Available',
+              badge: 'BALANCED',
+              description: 'Balanced translation service with 67% efficiency and optimal cost-speed ratio.',
+              endpoint: 'http://localhost:8000/services/translate?provider_id=beta',
+            },
+            gamma: {
+              id: 'p3_trans',
+              provider_id: 'gamma',
+              name: 'Translation Gamma',
+              service: 'Translation',
+              price: 0.001,
+              currency: 'ETH',
+              quality: 45,
+              qualityLabel: '45%',
+              efficiencyLabel: '45%',
+              rating: 4.2,
+              responseTime: '250ms',
+              responseTimeMs: 250,
+              status: 'Available',
+              badge: 'LOWEST PRICE',
+              description: 'Budget translation service with 45% efficiency and economical cost.',
+              endpoint: 'http://localhost:8000/services/translate?provider_id=gamma',
+            },
+          };
+
           const formatted = [];
-          res.providers.forEach((p, idx) => {
-            const services = p.services || {};
-            Object.keys(services).forEach((serviceKey) => {
-              const sInfo = services[serviceKey];
-              const serviceName = serviceKey.charAt(0).toUpperCase() + serviceKey.slice(1);
-              const isCheaper = (p.provider_id === 'beta');
-              formatted.push({
-                id: `${p.provider_id || idx}_${serviceKey}`,
-                provider_id: p.provider_id,
-                name: p.name || 'Service Provider',
-                service: serviceName,
-                price: sInfo.price_per_unit,
-                currency: 'ETH',
-                unit: sInfo.unit,
-                quality: p.provider_id === 'alpha' ? 98 : 94,
-                qualityLabel: p.provider_id === 'alpha' ? '98%' : '94%',
-                rating: p.provider_id === 'alpha' ? 4.9 : 4.6,
-                responseTime: p.provider_id === 'alpha' ? '95ms' : '140ms',
-                responseTimeMs: p.provider_id === 'alpha' ? 95 : 140,
-                status: 'Available',
-                badge: isCheaper ? 'LOWEST PRICE' : 'TOP QUALITY',
-                description: p.description || `Registered independent ${serviceName} provider on AgentPay network.`,
-                endpoint: `${p.base_url || 'http://localhost:8000'}/services/${serviceKey}?provider_id=${p.provider_id}`,
-              });
-            });
+          res.providers.forEach((p) => {
+            const pid = (p.provider_id || '').toLowerCase();
+            if (pid === 'alpha' || p.name.includes('Alpha')) {
+              formatted.push({ ...formattedMap.alpha, price: p.services?.translation?.price_per_unit || 0.005 });
+            } else if (pid === 'beta' || p.name.includes('Beta')) {
+              formatted.push({ ...formattedMap.beta, price: p.services?.translation?.price_per_unit || 0.003 });
+            } else if (pid === 'gamma' || p.name.includes('Gamma') || p.name.includes('Gama')) {
+              formatted.push({ ...formattedMap.gamma, price: p.services?.translation?.price_per_unit || 0.001 });
+            }
           });
-          setProviders(formatted);
+
+          if (formatted.length === 0) {
+            setProviders(mockProviders);
+          } else {
+            setProviders(formatted);
+          }
           setIsBackendLive(true);
         } else {
           setProviders(mockProviders);
@@ -149,7 +195,7 @@ export default function Providers() {
             )}
           </div>
           <p className="text-xs text-gray-500 font-medium mt-0.5">
-            Independent service providers registered on the AgentPay network.
+            Independent translation service providers registered on the AgentPay network.
           </p>
         </div>
 
@@ -167,7 +213,7 @@ export default function Providers() {
         
         {/* Category Tabs */}
         <div className="flex items-center space-x-1.5 overflow-x-auto pb-1 sm:pb-0">
-          {['All', 'Translation', 'Storage', 'Compute'].map((category) => (
+          {['Translation'].map((category) => (
             <button
               key={category}
               onClick={() => setSelectedCategory(category)}
@@ -177,7 +223,7 @@ export default function Providers() {
                   : 'bg-white text-gray-600 hover:bg-[#FDF8F5] border border-[#E9D8CC]'
               }`}
             >
-              {category}
+              {category} Services
             </button>
           ))}
         </div>
@@ -191,7 +237,7 @@ export default function Providers() {
             className="py-2 px-3 bg-white border border-[#E9D8CC] rounded-2xl text-xs font-bold text-[#343434] focus:outline-none focus:border-[#FAD2C0] transition-all shadow-xs cursor-pointer"
           >
             <option value="price-low">Sort: Price (Low → High)</option>
-            <option value="quality-high">Sort: Quality (High → Low)</option>
+            <option value="quality-high">Sort: Efficiency (High → Low)</option>
             <option value="rating-high">Sort: Rating (High → Low)</option>
             <option value="speed-fast">Sort: Speed (Fastest)</option>
           </select>
@@ -267,9 +313,9 @@ export default function Providers() {
                   </div>
 
                   <div>
-                    <span className="text-[10px] text-gray-400 block font-medium">Quality</span>
+                    <span className="text-[10px] text-gray-400 block font-medium">Efficiency</span>
                     <span className="font-extrabold text-[#3E8C5A]">
-                      {provider.qualityLabel || '98%'}
+                      {provider.efficiencyLabel || provider.qualityLabel || '94%'}
                     </span>
                   </div>
 
@@ -353,9 +399,9 @@ export default function Providers() {
                 </div>
 
                 <div>
-                  <span className="text-gray-400 text-[10px] block font-medium">Quality Score</span>
+                  <span className="text-gray-400 text-[10px] block font-medium">Efficiency</span>
                   <span className="font-extrabold text-sm text-[#3E8C5A]">
-                    {selectedProvider.qualityLabel || '98%'}
+                    {selectedProvider.efficiencyLabel || selectedProvider.qualityLabel || '94%'}
                   </span>
                 </div>
 
@@ -368,7 +414,7 @@ export default function Providers() {
                 </div>
 
                 <div>
-                  <span className="text-gray-400 text-[10px] block font-medium">Response Time</span>
+                  <span className="text-gray-400 text-[10px] block font-medium">Speed</span>
                   <span className="font-bold text-sm text-gray-700">
                     {selectedProvider.responseTime || '90ms'}
                   </span>
@@ -414,3 +460,4 @@ export default function Providers() {
     </div>
   );
 }
+

@@ -27,6 +27,10 @@ class Settings(BaseSettings):
     CONTRACT_ADDRESS: Optional[str] = None
     PAYMENT_VERIFIER_TYPE: str = "on_chain"
 
+    # Gemini Service Configuration
+    GEMINI_API_KEY: Optional[str] = None
+    GEMINI_MODEL: str = "gemini-2.5-flash"
+
     @field_validator("PROVIDER_WALLET_ADDRESS")
     @classmethod
     def validate_provider_wallet_address(cls, v: str) -> str:

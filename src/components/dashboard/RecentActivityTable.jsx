@@ -66,7 +66,7 @@ export default function RecentActivityTable({ transactions, onSelectTransaction,
                   {tx.provider}
                 </td>
                 <td className="py-3.5 px-2 font-bold text-[#343434]">
-                  ₹{tx.amount.toFixed(2)}
+                  {tx.amountEth || `${(tx.amount || 0).toFixed(4)} ETH`}
                 </td>
                 <td className="py-3.5 px-2">
                   <StatusBadge status={tx.delivery_status} />

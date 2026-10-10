@@ -1,5 +1,5 @@
 import React from 'react';
-import { X, ShieldCheck, ShieldAlert, Clock, Building, DollarSign, FileCode, ArrowDown, RefreshCw } from 'lucide-react';
+import { X, ShieldCheck, ShieldAlert, Clock, ArrowDown, RefreshCw } from 'lucide-react';
 import StatusBadge from './StatusBadge';
 
 export default function TransactionModal({ transaction, onClose }) {
@@ -7,14 +7,18 @@ export default function TransactionModal({ transaction, onClose }) {
 
   const isDelivered = transaction.delivery_status === 'Delivered' || transaction.delivery_status === 'Fulfilled';
   const isBlocked = transaction.delivery_status === 'Blocked' || transaction.delivery_status === 'Failed';
-  const isProcessing = !isDelivered && !isBlocked;
   const hasRetryInfo = transaction.request_id === 'A104';
 
+  const amountDisplay = transaction.amountEth 
+    ? transaction.amountEth 
+    : `${(transaction.amount || 0).toFixed(4)} ETH`;
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs animate-fadeIn select-none">
-      <div className="bg-[#FFF9F5] border border-[#E9D8CC] rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden text-[#343434]">
-        {/* Header */}
-        <div className="px-6 py-4 border-b border-[#E9D8CC] flex items-center justify-between bg-white">
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/50 backdrop-blur-xs p-4 sm:p-6 flex min-h-full items-center justify-center animate-fadeIn select-none">
+      <div className="relative bg-[#FFF9F5] border border-[#E9D8CC] rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden my-auto text-[#343434] max-h-[90vh] flex flex-col">
+        
+        {/* Sticky Header with Always-Visible Close Button */}
+        <div className="px-6 py-4 border-b border-[#E9D8CC] flex items-center justify-between bg-white shrink-0">
           <div className="flex items-center space-x-2">
             <span className="text-lg font-black text-[#343434]">
               Request Details — #{transaction.request_id}
@@ -22,14 +26,15 @@ export default function TransactionModal({ transaction, onClose }) {
           </div>
           <button
             onClick={onClose}
-            className="p-1 rounded-xl text-gray-400 hover:text-gray-700 hover:bg-[#FAD2C0]/30 transition-colors cursor-pointer"
+            className="p-2 rounded-xl text-gray-400 hover:text-gray-700 hover:bg-[#FAD2C0]/40 transition-colors cursor-pointer shrink-0"
+            title="Close modal"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Content Body */}
-        <div className="p-6 space-y-4 max-h-[80vh] overflow-y-auto">
+        {/* Scrollable Body */}
+        <div className="p-6 space-y-4 overflow-y-auto flex-1">
           {/* Top Status Banner */}
           <div className={`p-4 rounded-2xl border flex items-center space-x-3 ${
             isDelivered
@@ -84,7 +89,7 @@ export default function TransactionModal({ transaction, onClose }) {
                 {/* Step 2: Payment */}
                 <div className="p-2.5 bg-[#FFF9F5] border border-[#E9D8CC] rounded-xl flex justify-between items-center">
                   <span className="font-semibold text-gray-500">PAYMENT</span>
-                  <span className="font-extrabold text-[#343434]">{transaction.amountEth || `₹${transaction.amount.toFixed(2)}`}</span>
+                  <span className="font-extrabold text-[#343434]">{amountDisplay}</span>
                 </div>
 
                 <div className="flex justify-center text-gray-300">
@@ -136,7 +141,7 @@ export default function TransactionModal({ transaction, onClose }) {
                 </div>
                 <div className="p-3 bg-[#FFF9F5] border border-[#E9D8CC] rounded-xl">
                   <span className="text-gray-400 block text-[10px]">Requested Amount</span>
-                  <span className="font-extrabold text-[#C94C4C]">{transaction.amountEth || `₹${transaction.amount.toFixed(2)}`}</span>
+                  <span className="font-extrabold text-[#C94C4C]">{amountDisplay}</span>
                 </div>
                 <div className="p-3 bg-[#FFF9F5] border border-[#E9D8CC] rounded-xl">
                   <span className="text-gray-400 block text-[10px]">Reason</span>
@@ -148,7 +153,7 @@ export default function TransactionModal({ transaction, onClose }) {
                 </div>
                 <div className="p-3 bg-[#FFF9F5] border border-[#E9D8CC] rounded-xl">
                   <span className="text-gray-400 block text-[10px]">Payment Deducted</span>
-                  <span className="font-extrabold text-[#3E8C5A]">{transaction.amountEth ? '0.00 ETH' : '₹0.00'}</span>
+                  <span className="font-extrabold text-[#3E8C5A]">0.00 ETH</span>
                 </div>
                 <div className="p-3 bg-[#FFF9F5] border border-[#E9D8CC] rounded-xl">
                   <span className="text-gray-400 block text-[10px]">Delivery Status</span>
@@ -207,7 +212,7 @@ export default function TransactionModal({ transaction, onClose }) {
                 </div>
                 <div>
                   <span className="text-gray-500 block">Additional Charge:</span>
-                  <span className="font-bold text-[#3E8C5A]">₹0.00</span>
+                  <span className="font-bold text-[#3E8C5A]">0.00 ETH</span>
                 </div>
               </div>
               <p className="text-[10px] text-gray-600 font-serif italic pt-1 border-t border-[#BBDEFB]">
@@ -225,8 +230,8 @@ export default function TransactionModal({ transaction, onClose }) {
           )}
         </div>
 
-        {/* Footer */}
-        <div className="px-6 py-3.5 bg-[#FDF8F5] border-t border-[#E9D8CC] flex justify-end">
+        {/* Sticky Footer */}
+        <div className="px-6 py-3.5 bg-[#FDF8F5] border-t border-[#E9D8CC] flex justify-end shrink-0">
           <button
             onClick={onClose}
             className="px-5 py-2.5 bg-[#FAD2C0] hover:bg-[#f8bd9e] text-[#343434] text-xs font-bold rounded-xl transition-all shadow-xs cursor-pointer"

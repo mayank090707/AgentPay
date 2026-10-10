@@ -304,7 +304,7 @@ export default function Audit() {
 
                   <div className="text-right space-y-1 shrink-0">
                     <div className="font-extrabold text-xs text-[#343434]">
-                      {tx.amountEth ? tx.amountEth : `₹${tx.amount.toFixed(2)}`}
+                      {tx.amountEth ? tx.amountEth : `${(tx.amount || 0).toFixed(4)} ETH`}
                     </div>
                     <StatusBadge status={tx.delivery_status} />
                   </div>
@@ -406,10 +406,10 @@ export default function Audit() {
                       <span className="w-5 h-5 rounded-full bg-[#FAD2C0]/40 flex items-center justify-center text-[10px]">2</span>
                       <span>STEP 2 — 402 PAYMENT REQUIRED</span>
                     </span>
-                    <span className="font-extrabold text-[#343434]">{selectedTx.amountEth || `₹${selectedTx.amount.toFixed(2)}`}</span>
+                    <span className="font-extrabold text-[#343434]">{selectedTx.amountEth || `${(selectedTx.amount || 0).toFixed(4)} ETH`}</span>
                   </div>
                   <p className="text-gray-600 text-[11px]">
-                    Provider {selectedTx.provider} issued quote of {selectedTx.amountEth || `₹${selectedTx.amount.toFixed(2)}`}.
+                    Provider {selectedTx.provider} issued quote of {selectedTx.amountEth || `${(selectedTx.amount || 0).toFixed(4)} ETH`}.
                   </p>
                 </div>
 
@@ -446,7 +446,7 @@ export default function Audit() {
                       <span className="w-5 h-5 rounded-full bg-white flex items-center justify-center text-[10px]">4</span>
                       <span>{isBlocked ? 'STEP 4 — ❌ PAYMENT BLOCKED' : 'STEP 4 — PAYMENT CONFIRMED'}</span>
                     </span>
-                    <span className="font-extrabold">{isBlocked ? '0.00 ETH Deducted' : `${selectedTx.amountEth || `₹${selectedTx.amount.toFixed(2)}`} Paid`}</span>
+                    <span className="font-extrabold">{isBlocked ? '0.00 ETH Deducted' : `${selectedTx.amountEth || `${(selectedTx.amount || 0).toFixed(4)} ETH`} Paid`}</span>
                   </div>
                   {isBlocked ? (
                     <p className="text-xs font-semibold">

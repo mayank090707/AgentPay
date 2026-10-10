@@ -266,15 +266,15 @@ export default function Settings() {
             <div className="grid grid-cols-3 gap-3 bg-white p-4 rounded-2xl border border-[#E9D8CC] text-xs">
               <div>
                 <span className="text-[10px] text-gray-400 block font-medium">Hard Limit</span>
-                <span className="font-extrabold text-sm text-[#343434]">₹500</span>
+                <span className="font-extrabold text-sm text-[#343434]">0.10 ETH</span>
               </div>
               <div>
                 <span className="text-[10px] text-gray-400 block font-medium">Current Spend</span>
-                <span className="font-bold text-sm text-[#55705C]">₹320</span>
+                <span className="font-bold text-sm text-[#55705C]">0.005 ETH</span>
               </div>
               <div>
                 <span className="text-[10px] text-gray-400 block font-medium">Remaining</span>
-                <span className="font-extrabold text-sm text-[#3E8C5A]">₹180</span>
+                <span className="font-extrabold text-sm text-[#3E8C5A]">0.095 ETH</span>
               </div>
             </div>
 

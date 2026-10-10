@@ -60,7 +60,7 @@ export default function TopProvidersList({ providers, onViewAll }) {
 
             <div className="text-right">
               <div className="text-xs font-bold text-[#343434]">
-                ₹{p.pricePerRequest} <span className="text-[10px] text-gray-400 font-normal">/ request</span>
+                {p.pricePerRequest} ETH <span className="text-[10px] text-gray-400 font-normal">/ request</span>
               </div>
               <div className="flex items-center justify-end space-x-1 text-[11px] text-amber-500 font-semibold mt-0.5">
                 <Star className="w-3 h-3 fill-amber-400 text-amber-400" />

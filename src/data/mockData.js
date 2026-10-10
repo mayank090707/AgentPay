@@ -13,13 +13,13 @@
  */
 
 export const mockContractSummary = {
-  totalBudget: 500,
-  totalSpent: 320,
-  remainingBudget: 180,
+  totalBudget: 0.10,
+  totalSpent: 0.005,
+  remainingBudget: 0.095,
   totalTransactions: 12,
   successfulTransactions: 10,
   blockedTransactions: 2,
-  currency: "₹",
+  currency: "ETH",
   enforcedBySmartContract: true,
   contractAddress: "0x742d35Cc6634C0532925a3b844Bc454e4438f44e",
   network: "Sepolia Connected",
@@ -27,21 +27,22 @@ export const mockContractSummary = {
 };
 
 export const mockSpendingOverview = [
-  { date: "Sep 6", successful: 50, blocked: 0 },
-  { date: "Sep 7", successful: 70, blocked: 0 },
-  { date: "Sep 8", successful: 110, blocked: 0 },
-  { date: "Sep 9", successful: 90, blocked: 0 },
-  { date: "Sep 10", successful: 80, blocked: 45 },
-  { date: "Sep 11", successful: 110, blocked: 0 },
-  { date: "Sep 12", successful: 90, blocked: 88 },
+  { date: "Sep 6", successful: 0.001, blocked: 0 },
+  { date: "Sep 7", successful: 0.002, blocked: 0 },
+  { date: "Sep 8", successful: 0.003, blocked: 0 },
+  { date: "Sep 9", successful: 0.002, blocked: 0 },
+  { date: "Sep 10", successful: 0.005, blocked: 0.002 },
+  { date: "Sep 11", successful: 0.003, blocked: 0 },
+  { date: "Sep 12", successful: 0.005, blocked: 0.005 },
 ];
 
 export const mockTransactions = [
   {
     request_id: "A104",
     service: "Translation",
-    provider: "LinguaAI",
-    amount: 50.00,
+    provider: "Translation Alpha",
+    amount: 0.005,
+    amountEth: "0.005 ETH",
     payment_tx: "0x89f2a1b0c9e8d7f6a5b4c3d2e1f0",
     delivery_status: "Delivered",
     content_hash: "0x4e8d2a1b9c8f7e6d5c4b3a21",
@@ -51,9 +52,10 @@ export const mockTransactions = [
   },
   {
     request_id: "A103",
-    service: "Storage",
-    provider: "FileDock",
-    amount: 100.00,
+    service: "Translation",
+    provider: "Translation Beta",
+    amount: 0.003,
+    amountEth: "0.003 ETH",
     payment_tx: "0x12c...9e4b",
     delivery_status: "Delivered",
     content_hash: "0x9a8b7c6d5e4f3a2b1c0d9e8f",
@@ -63,51 +65,16 @@ export const mockTransactions = [
   },
   {
     request_id: "A105",
-    service: "Compute",
-    provider: "CloudNet",
-    amount: 200.00,
+    service: "Translation",
+    provider: "Translation Alpha",
+    amount: 0.005,
+    amountEth: "0.005 ETH",
     payment_tx: "0x000...REJECTED",
     delivery_status: "Blocked",
     content_hash: "N/A - Budget Exceeded",
     timestamp: "10:05 AM",
     date: "2026-09-12",
-    error: "SmartContract: Hard spending limit exceeded (Attempted ₹200, Remaining ₹180)"
-  },
-  {
-    request_id: "A102",
-    service: "Translation",
-    provider: "LinguaAI",
-    amount: 50.00,
-    payment_tx: "0x3d7...1f9a",
-    delivery_status: "Delivered",
-    content_hash: "0x1b2c3d4e5f6a7b8c9d0e1f2a",
-    timestamp: "09:14 AM",
-    date: "2026-09-12",
-    error: null
-  },
-  {
-    request_id: "A101",
-    service: "Compute",
-    provider: "CloudNet",
-    amount: 120.00,
-    payment_tx: "0x6f5...4e3d",
-    delivery_status: "Delivered",
-    content_hash: "0x5a4b3c2d1e0f9e8d7c6b5a4b",
-    timestamp: "Sep 11, 04:45 PM",
-    date: "2026-09-11",
-    error: null
-  },
-  {
-    request_id: "A100",
-    service: "Storage",
-    provider: "FileDock",
-    amount: 35.00,
-    payment_tx: "0x9e8...7d6c",
-    delivery_status: "Delivered",
-    content_hash: "0x8f7e6d5c4b3a210987654321",
-    timestamp: "Sep 11, 02:15 PM",
-    date: "2026-09-11",
-    error: null
+    error: "SmartContract: Hard spending limit exceeded (Attempted 0.005 ETH, Remaining 0.001 ETH)"
   }
 ];
 
@@ -176,16 +143,16 @@ export const mockAgentDetails = {
   status: "ONLINE",
   network: "Sepolia Testnet",
   totalBudget: "0.10",
-  totalSpent: "0.0005",
-  remainingBudget: "0.0995",
+  totalSpent: "0.005",
+  remainingBudget: "0.095",
   currency: "ETH"
 };
 
 export const mockCurrentTask = {
   prompt: "Translate this document into Hindi",
   service: "Translation",
-  provider: "Beta Cloud",
-  requestedAmount: "0.00002 ETH",
+  provider: "Translation Beta",
+  requestedAmount: "0.003 ETH",
   request_id: "A104",
   status: "Processing"
 };
@@ -203,7 +170,7 @@ export const mockPipelineSteps = [
     step: 2,
     id: "provider",
     title: "Provider Found",
-    description: "LinguaAI located; endpoint pinged",
+    description: "Translation Beta located; endpoint pinged",
     icon: "Search",
     timestamp: "12:31:03"
   },
@@ -227,7 +194,7 @@ export const mockPipelineSteps = [
     step: 5,
     id: "smart_contract",
     title: "Smart Contract Check",
-    description: "Enforced by Solidity Smart Contract (Hard cap cap check)",
+    description: "Enforced by Solidity Smart Contract (Hard cap check)",
     icon: "ShieldCheck",
     timestamp: "12:31:05"
   },
@@ -251,9 +218,9 @@ export const mockPipelineSteps = [
 
 export const mockAgentLogs = [
   { time: "12:31:02", text: "Agent initiated Translation request (#A104)" },
-  { time: "12:31:03", text: "Provider Beta Cloud returned 402 Payment Required (0.00002 ETH)" },
+  { time: "12:31:03", text: "Provider Translation Beta returned 402 Payment Required (0.003 ETH)" },
   { time: "12:31:04", text: "Payment authorization requested for Request ID #A104" },
-  { time: "12:31:05", text: "Smart contract verified spending limit (0.0005 ETH spent / 0.10 ETH cap)" },
+  { time: "12:31:05", text: "Smart contract verified spending limit (0.005 ETH spent / 0.10 ETH cap)" },
   { time: "12:31:06", text: "Sepolia payment confirmed (Tx: 0x89f2a1...3a1c)" },
   { time: "12:31:07", text: "Service payload delivered successfully (Content Hash: 0x4e8d...)" }
 ];
@@ -267,17 +234,14 @@ export const mockRetryState = {
   statusMessage: "Duplicate payment prevented by smart contract on-chain state"
 };
 
-/**
- * Stage 2E — Centralized Mock Security System Model
- */
 export const mockSecurityState = {
   protectionStatus: "Protection Active",
-  hardCap: 500,
-  totalSpent: 320,
-  remainingBudget: 180,
+  hardCap: 0.10,
+  totalSpent: 0.005,
+  remainingBudget: 0.095,
   blockedAttempts: 2,
   duplicatePrevented: 0,
-  currency: "₹",
+  currency: "ETH",
   enforcementLayer: "Sepolia Solidity Smart Contract"
 };
 
@@ -286,46 +250,38 @@ export const mockSecurityEvents = [
     timestamp: "09/12/2026 12:31 PM",
     request_id: "A104",
     eventType: "Payment Authorized",
-    amount: 50,
+    amount: 0.005,
     status: "APPROVED",
-    details: "Within hard cap (₹320 / ₹500 limit)"
+    details: "Within hard cap (0.005 ETH / 0.10 ETH limit)"
   },
   {
     timestamp: "09/12/2026 12:34 PM",
     request_id: "A105",
     eventType: "Budget Exceeded",
-    amount: 250,
+    amount: 0.15,
     status: "BLOCKED",
-    details: "Rejected by contract: Attempted ₹250 exceeds ₹180 remaining cap"
-  },
-  {
-    timestamp: "09/12/2026 12:35 PM",
-    request_id: "A104",
-    eventType: "Duplicate Retry",
-    amount: 0,
-    status: "PREVENTED",
-    details: "Duplicate payment prevented on-chain (Request #A104 state checked)"
+    details: "Rejected by contract: Attempted 0.15 ETH exceeds remaining cap"
   }
 ];
 
 export const mockSpendingCapDemo = {
   blockedExample: {
     request_id: "A105",
-    requestedAmount: 250,
-    service: "Compute",
-    provider: "ComputeX",
-    availableBefore: 180,
+    requestedAmount: 0.15,
+    service: "Translation",
+    provider: "Translation Alpha",
+    availableBefore: 0.095,
     result: "PAYMENT BLOCKED",
     reason: "BUDGET_EXCEEDED",
     explanation: "The agent requested the payment, but the contract rejected it because the requested amount exceeds the remaining budget."
   },
   approvedExample: {
     request_id: "A104",
-    requestedAmount: 50,
+    requestedAmount: 0.005,
     service: "Translation",
-    provider: "LinguaAI",
-    availableBefore: 230,
-    remainingAfter: 180,
+    provider: "Translation Alpha",
+    availableBefore: 0.10,
+    remainingAfter: 0.095,
     result: "APPROVED",
     statusText: "PAYMENT AUTHORIZED",
     explanation: "Authorization comes from the contract state."
@@ -394,9 +350,6 @@ export const mockSecurityGuarantees = [
   }
 ];
 
-/**
- * Stage 2F — Centralized Settings & User Profile Model
- */
 export const mockSettings = {
   profile: {
     name: "Mayank Sharma",
@@ -415,9 +368,9 @@ export const mockSettings = {
     securityAlerts: true
   },
   agentSettings: {
-    hardSpendingLimit: 500,
-    totalSpent: 320,
-    remainingBudget: 180,
+    hardSpendingLimit: 0.10,
+    totalSpent: 0.005,
+    remainingBudget: 0.095,
     enforcement: "Smart Contract",
     status: "Protected"
   },

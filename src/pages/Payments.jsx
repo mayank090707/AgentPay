@@ -343,7 +343,7 @@ export default function Payments() {
                         {tx.provider}
                       </td>
                       <td className="py-3.5 px-3 font-extrabold text-[#343434]">
-                        {tx.amountEth ? tx.amountEth : `₹${tx.amount.toFixed(2)}`}
+                        {tx.amountEth ? tx.amountEth : `${(tx.amount || 0).toFixed(4)} ETH`}
                       </td>
                       <td className="py-3.5 px-3">
                         <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
